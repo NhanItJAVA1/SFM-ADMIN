@@ -101,7 +101,7 @@ const emptyRagMetadataForm: RagMetadataFormState = {
   ragCategory: "General",
   title: "",
 };
-const supportedRagFileExtensions = new Set(["txt", "docs", "md", "pdf"]);
+const supportedRagFileExtensions = new Set(["txt", "md", "pdf", "docx"]);
 const userStatusOptions: AdminUserStatus[] = ["Active", "Inactive", "Suspended"];
 const userRoleOptions: AdminUserRole[] = ["User", "Admin"];
 const categoryIconOptions: CategoryIconOption[] = [
@@ -566,7 +566,7 @@ export default function AdminScreen() {
     const fileType = getFileExtension(asset.name);
 
     if (!isSupportedRagFileType(fileType)) {
-      showAdminMessage("Định dạng chưa hỗ trợ", "Hiện chỉ hỗ trợ .txt, .docs, .md và .pdf.");
+      showAdminMessage("Định dạng chưa hỗ trợ", "Hiện chỉ hỗ trợ .txt, .md, .pdf và .docx.");
       return;
     }
 
@@ -600,7 +600,7 @@ export default function AdminScreen() {
     }
 
     if (!isSupportedRagFileType(fileType)) {
-      showAdminMessage("Định dạng chưa hỗ trợ", "Hiện chỉ hỗ trợ .txt, .docs, .md và .pdf.");
+      showAdminMessage("Định dạng chưa hỗ trợ", "Hiện chỉ hỗ trợ .txt, .md, .pdf và .docx.");
       return;
     }
 
@@ -622,7 +622,7 @@ export default function AdminScreen() {
       setIsRagUploadVisible(false);
       setRagUploadForm(emptyRagUploadForm);
       await loadAdminData({ refresh: true });
-      showAdminMessage("Upload thành công", "Tài liệu đã được upload và gửi yêu cầu indexing.");
+      showAdminMessage("Upload thành công", "Tài liệu đã được upload và lập chỉ mục thành công.");
     } catch (error) {
       if (createdDocumentId !== null) {
         await loadAdminData({ refresh: true });
@@ -630,7 +630,7 @@ export default function AdminScreen() {
 
       showAdminMessage(
         createdDocumentId === null ? "Tạo tài liệu thất bại" : "Upload hoặc confirm thất bại",
-        error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+        getRequestErrorMessage(error),
       );
     } finally {
       setIsUploadingRagDocument(false);
@@ -1602,7 +1602,7 @@ function RagUploadModal({
             <Pressable style={styles.filePickerButton} onPress={onPickFile} disabled={isUploading}>
               <Text style={styles.filePickerTitle}>{form.asset ? form.asset.name : "Chọn file tài liệu"}</Text>
               <Text style={styles.filePickerSubtitle}>
-                {form.asset ? `${formatFileSize(form.asset.size)} · ${form.fileType}` : ".txt, .docs, .md hoặc .pdf"}
+                {form.asset ? `${formatFileSize(form.asset.size)} · ${form.fileType}` : ".txt, .md, .pdf hoặc .docx"}
               </Text>
             </Pressable>
 
