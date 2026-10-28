@@ -1,10 +1,27 @@
 import * as DocumentPicker from "expo-document-picker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { RAG_DOCUMENT_UPLOAD_CONTENT_TYPE, ragDocumentsApi, type RagDocument } from "@/api/ragDocumentsApi";
+import {
+  RAG_DOCUMENT_UPLOAD_CONTENT_TYPE,
+  ragDocumentsApi,
+  type RagDocument,
+  type RagDocumentStatus,
+} from "@/api/ragDocumentsApi";
 import { getRequestErrorMessage } from "@/components/admin/admin-page-shared";
-import { useAdminPageActive, useAdminResource } from "@/hooks/use-admin-resource";
+import {
+  useAdminPageActive,
+  useAdminResource,
+} from "@/hooks/use-admin-resource";
 import type { RagOperationFeedback } from "./rag-operation-dialog";
+
+export type RagMenuAnchor = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+export type RagStatusFilter = "All" | RagDocumentStatus;
+export type RagDocumentSort = "updated" | "name" | "chunks";
 
 export type RagUploadFormState = {
   title: string;
@@ -49,26 +66,130 @@ function isSupportedRagFileType(fileType: string) {
   return supportedRagFileExtensions.has(fileType.toLowerCase());
 }
 
-async function fetchDocuments(signal: AbortSignal) { return (await ragDocumentsApi.list(signal)).data; }
+async function fetchDocuments(signal: AbortSignal) {
+  return (await ragDocumentsApi.list(signal)).data;
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase();
+}
+
+function getRagListView(
+  documents: RagDocument[],
+  search: string,
+  status: RagStatusFilter,
+  category: string,
+  sort: RagDocumentSort,
+  page: number,
+  pageSize: number,
+) {
+  const counts: Record<RagStatusFilter, number> = {
+    All: documents.length,
+    Indexed: 0,
+    Processing: 0,
+    Draft: 0,
+    Failed: 0,
+  };
+  const categories = new Set<string>();
+  for (const document of documents) {
+    if (Object.hasOwn(counts, document.status)) counts[document.status] += 1;
+    categories.add(document.ragCategory?.trim() || "General");
+  }
+  if (category) categories.add(category);
+  const keyword = normalizeSearch(search.trim());
+  const filtered = documents.filter(
+    (document) =>
+      (status === "All" || document.status === status) &&
+      (!category || (document.ragCategory?.trim() || "General") === category) &&
+      (!keyword ||
+        normalizeSearch(
+          [
+            document.title,
+            document.fileName,
+            document.description ?? "",
+            document.ragCategory ?? "",
+          ].join(" "),
+        ).includes(keyword)),
+  );
+  const timestamp = (document: RagDocument) =>
+    Date.parse(document.updatedAt || document.createdAt) || 0;
+  filtered.sort((left, right) =>
+    sort === "name"
+      ? left.title.localeCompare(right.title, "vi") || left.id - right.id
+      : sort === "chunks"
+        ? right.chunkCount - left.chunkCount || right.id - left.id
+        : timestamp(right) - timestamp(left) || right.id - left.id,
+  );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  return {
+    counts,
+    categories: [...categories].sort((a, b) => a.localeCompare(b, "vi")),
+    documents: filtered.slice(
+      (currentPage - 1) * pageSize,
+      currentPage * pageSize,
+    ),
+    filteredCount: filtered.length,
+    totalPages,
+    page: currentPage,
+  };
+}
 
 /** Owns RAG state and operations so the page and dialogs stay presentational. */
 export function useRagDocuments() {
   const pageActive = useAdminPageActive();
 
-  const { data: ragDocuments, setData: setRagDocuments, loading: isLoading, refreshing: isRefreshing, error: loadError, reload: loadDocuments } =
-    useAdminResource(fetchDocuments, [] as RagDocument[]);
+  const {
+    data: ragDocuments,
+    setData: setRagDocuments,
+    loading: isLoading,
+    refreshing: isRefreshing,
+    error: loadError,
+    reload: loadDocuments,
+  } = useAdminResource(fetchDocuments, [] as RagDocument[]);
 
-  const ragLoadWarning = loadError ? "Không tải được tài liệu RAG: " + loadError : undefined;
+  const ragLoadWarning = loadError
+    ? "Không tải được tài liệu RAG: " + loadError
+    : undefined;
 
-  const [selectedRagDocument, setSelectedRagDocument] = useState<RagDocument | null>(null);
+  const [selectedRagDocument, setSelectedRagDocument] =
+    useState<RagDocument | null>(null);
 
-  const [actionMenuRagDocument, setActionMenuRagDocument] = useState<RagDocument | null>(null);
+  const [actionMenuRagDocument, setActionMenuRagDocument] =
+    useState<RagDocument | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<RagMenuAnchor | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<RagStatusFilter>("All");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [sort, setSort] = useState<RagDocumentSort>("updated");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const listView = useMemo(
+    () =>
+      getRagListView(
+        ragDocuments,
+        search,
+        statusFilter,
+        categoryFilter,
+        sort,
+        page,
+        pageSize,
+      ),
+    [ragDocuments, search, statusFilter, categoryFilter, sort, page, pageSize],
+  );
 
-  const [editingRagDocument, setEditingRagDocument] = useState<RagDocument | null>(null);
+  const [editingRagDocument, setEditingRagDocument] =
+    useState<RagDocument | null>(null);
 
-  const [ragUploadForm, setRagUploadForm] = useState<RagUploadFormState>(emptyRagUploadForm);
+  const [ragUploadForm, setRagUploadForm] =
+    useState<RagUploadFormState>(emptyRagUploadForm);
 
-  const [ragMetadataForm, setRagMetadataForm] = useState<RagMetadataFormState>(emptyRagMetadataForm);
+  const [ragMetadataForm, setRagMetadataForm] =
+    useState<RagMetadataFormState>(emptyRagMetadataForm);
 
   const [isRagDetailVisible, setIsRagDetailVisible] = useState(false);
 
@@ -82,16 +203,54 @@ export function useRagDocuments() {
 
   const [isSavingRagMetadata, setIsSavingRagMetadata] = useState(false);
 
-  const [processingDocumentId, setProcessingDocumentId] = useState<number | null>(null);
+  const [processingDocumentId, setProcessingDocumentId] = useState<
+    number | null
+  >(null);
 
-  const [ragFeedback, setRagFeedback] = useState<RagOperationFeedback | null>(null);
-  const [documentToDelete, setDocumentToDelete] = useState<RagDocument | null>(null);
+  const [ragFeedback, setRagFeedback] = useState<RagOperationFeedback | null>(
+    null,
+  );
+  const [documentToDelete, setDocumentToDelete] = useState<RagDocument | null>(
+    null,
+  );
 
   const ragOperationInFlightRef = useRef(false);
 
-  const ragMetadataOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ragMetadataOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
-  useEffect(() => () => { if (ragMetadataOpenTimerRef.current) clearTimeout(ragMetadataOpenTimerRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (ragMetadataOpenTimerRef.current)
+        clearTimeout(ragMetadataOpenTimerRef.current);
+    },
+    [],
+  );
+  // An anchored menu belongs to the current focus session.
+  useEffect(
+    () => () => {
+      setActionMenuRagDocument(null);
+      setMenuAnchor(null);
+    },
+    [pageActive],
+  );
+
+  function openRagMenu(
+    document: RagDocument,
+    anchor: RagMenuAnchor | null = null,
+  ) {
+    if (ragOperationInFlightRef.current || document.status === "Processing")
+      return;
+    setMenuAnchor(anchor);
+    setActionMenuRagDocument(document);
+  }
+
+  function resetListPosition() {
+    setPage(1);
+    setActionMenuRagDocument(null);
+    setMenuAnchor(null);
+  }
 
   function openRagUpload() {
     setRagUploadForm(emptyRagUploadForm);
@@ -367,10 +526,56 @@ export function useRagDocuments() {
     reload: loadDocuments,
     processingDocumentId,
     openUpload: openRagUpload,
-    openMenu: setActionMenuRagDocument,
+    openMenu: openRagMenu,
     requestDelete: requestDeleteRagDocument,
+    openDetail: openRagDocumentDetail,
+    list: {
+      ...listView,
+      search,
+      status: statusFilter,
+      category: categoryFilter,
+      sort,
+      pageSize,
+      hasFilters: Boolean(
+        search.trim() || statusFilter !== "All" || categoryFilter,
+      ),
+      setSearch: (value: string) => {
+        setSearch(value);
+        resetListPosition();
+      },
+      setStatus: (value: RagStatusFilter) => {
+        setStatusFilter(value);
+        resetListPosition();
+      },
+      setCategory: (value: string) => {
+        setCategoryFilter(value);
+        resetListPosition();
+      },
+      setSort: (value: RagDocumentSort) => {
+        setSort(value);
+        resetListPosition();
+      },
+      setPage: (value: number) => {
+        setPage(Math.min(Math.max(1, value), listView.totalPages));
+        setActionMenuRagDocument(null);
+      },
+      setPageSize: (value: number) => {
+        if (![10, 20, 50].includes(value)) return;
+        setPageSize(value);
+        resetListPosition();
+      },
+      clearFilters: () => {
+        setSearch("");
+        setStatusFilter("All");
+        setCategoryFilter("");
+        resetListPosition();
+      },
+    },
     feedback: pageActive ? ragFeedback : null,
-    closeFeedback: () => setRagFeedback(current => current?.status === "loading" ? current : null),
+    closeFeedback: () =>
+      setRagFeedback((current) =>
+        current?.status === "loading" ? current : null,
+      ),
     deleteConfirmation: {
       document: pageActive ? documentToDelete : null,
       onClose: () => setDocumentToDelete(null),
@@ -392,11 +597,15 @@ export function useRagDocuments() {
       },
       onPickFile: pickRagDocumentFile,
       onSubmit: uploadRagDocument,
-      visible: pageActive && isRagUploadVisible
+      visible: pageActive && isRagUploadVisible,
     },
     menu: {
       document: pageActive ? actionMenuRagDocument : null,
-      isProcessing: actionMenuRagDocument ? processingDocumentId === actionMenuRagDocument.id || actionMenuRagDocument.status === "Processing" : false,
+      anchor: menuAnchor,
+      isProcessing: actionMenuRagDocument
+        ? processingDocumentId === actionMenuRagDocument.id ||
+          actionMenuRagDocument.status === "Processing"
+        : false,
       onClose: () => setActionMenuRagDocument(null),
       onDelete: () => {
         if (actionMenuRagDocument) {
@@ -423,12 +632,15 @@ export function useRagDocuments() {
           setActionMenuRagDocument(null);
           void reindexRagDocument(document);
         }
-      }
+      },
     },
     detail: {
       document: selectedRagDocument,
       isLoading: isLoadingRagDetail,
-      isProcessing: selectedRagDocument ? processingDocumentId === selectedRagDocument.id || selectedRagDocument.status === "Processing" : false,
+      isProcessing: selectedRagDocument
+        ? processingDocumentId === selectedRagDocument.id ||
+          selectedRagDocument.status === "Processing"
+        : false,
       onClose: () => {
         setIsRagDetailVisible(false);
         setSelectedRagDocument(null);
@@ -448,7 +660,7 @@ export function useRagDocuments() {
           void reindexRagDocument(selectedRagDocument);
         }
       },
-      visible: pageActive && isRagDetailVisible
+      visible: pageActive && isRagDetailVisible,
     },
     metadata: {
       form: ragMetadataForm,
@@ -461,8 +673,8 @@ export function useRagDocuments() {
         }
       },
       onSubmit: saveRagMetadata,
-      visible: pageActive && isRagMetadataVisible
-    }
+      visible: pageActive && isRagMetadataVisible,
+    },
   };
 }
 
