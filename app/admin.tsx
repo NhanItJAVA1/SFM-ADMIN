@@ -45,6 +45,7 @@ import { RAG_DOCUMENT_UPLOAD_CONTENT_TYPE, ragDocumentsApi, type RagDocument } f
 import { FocusedScreenTransition } from "@/components/screen-transition";
 import { adminStyleSheet, useAdminFonts, useAdminTheme, type AdminTheme } from "@/components/admin/admin-design";
 import { AdminShell, type AdminView } from "@/components/admin/admin-shell";
+import { RagOperationDialog, type RagOperationFeedback } from "@/components/admin/rag-operation-dialog";
 import { ForecastTrainingWorkspace } from "@/components/admin/forecast-training-workspace";
 import { ForecastTrainingResult } from "@/components/admin/forecast-training-result";
 import { SystemMonitoringWorkspace } from "@/components/admin/system-monitoring-workspace";
@@ -102,6 +103,7 @@ const emptyRagMetadataForm: RagMetadataFormState = {
   title: "",
 };
 const supportedRagFileExtensions = new Set(["txt", "md", "pdf", "docx"]);
+const ragUploadSteps = ["Tạo tài liệu", "Tải tệp lên", "Lập chỉ mục"] as const;
 const userStatusOptions: AdminUserStatus[] = ["Active", "Inactive", "Suspended"];
 const userRoleOptions: AdminUserRole[] = ["User", "Admin"];
 const categoryIconOptions: CategoryIconOption[] = [
@@ -272,6 +274,8 @@ export default function AdminScreen() {
   const [isUploadingRagDocument, setIsUploadingRagDocument] = useState(false);
   const [isSavingRagMetadata, setIsSavingRagMetadata] = useState(false);
   const [processingDocumentId, setProcessingDocumentId] = useState<number | null>(null);
+  const [ragFeedback, setRagFeedback] = useState<RagOperationFeedback | null>(null);
+  const ragOperationInFlightRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -281,6 +285,7 @@ export default function AdminScreen() {
   const ragMetadataOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const defaultCategories = categories;
+  const ragLoadWarning = adminLoadWarnings.find((warning) => warning.startsWith("Không tải được tài liệu RAG:"));
   const userTotalPages = Math.max(1, Math.ceil(userTotalCount / userPageSize));
 
   useEffect(() => {
@@ -552,11 +557,17 @@ export default function AdminScreen() {
   }
 
   async function pickRagDocumentFile() {
-    const result = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: false,
-      type: "*/*",
-    });
+    let result: DocumentPicker.DocumentPickerResult;
+    try {
+      result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: false,
+        type: "*/*",
+      });
+    } catch (error) {
+      setRagFeedback({ status: "error", title: "Không mở được tệp", message: "Vui lòng chọn lại tài liệu.", details: getRequestErrorMessage(error) });
+      return;
+    }
 
     if (result.canceled) {
       return;
@@ -566,7 +577,7 @@ export default function AdminScreen() {
     const fileType = getFileExtension(asset.name);
 
     if (!isSupportedRagFileType(fileType)) {
-      showAdminMessage("Định dạng chưa hỗ trợ", "Hiện chỉ hỗ trợ .txt, .md, .pdf và .docx.");
+      setRagFeedback({ status: "error", title: "Định dạng chưa hỗ trợ", message: "Vui lòng chọn tài liệu .txt, .md, .pdf hoặc .docx." });
       return;
     }
 
@@ -582,6 +593,7 @@ export default function AdminScreen() {
   }
 
   async function uploadRagDocument() {
+    if (ragOperationInFlightRef.current) return;
     const title = ragUploadForm.title.trim();
     const description = ragUploadForm.description.trim();
     const ragCategory = ragUploadForm.ragCategory.trim() || "General";
@@ -590,22 +602,24 @@ export default function AdminScreen() {
     let createdDocumentId: number | null = null;
 
     if (!asset) {
-      showAdminMessage("Chưa chọn file", "Vui lòng chọn tài liệu cần upload.");
+      setRagFeedback({ status: "error", title: "Chưa chọn tệp", message: "Vui lòng chọn tài liệu cần tải lên." });
       return;
     }
 
     if (!title) {
-      showAdminMessage("Thiếu tiêu đề", "Vui lòng nhập tiêu đề tài liệu.");
+      setRagFeedback({ status: "error", title: "Thiếu tiêu đề", message: "Vui lòng nhập tiêu đề tài liệu." });
       return;
     }
 
     if (!isSupportedRagFileType(fileType)) {
-      showAdminMessage("Định dạng chưa hỗ trợ", "Hiện chỉ hỗ trợ .txt, .md, .pdf và .docx.");
+      setRagFeedback({ status: "error", title: "Định dạng chưa hỗ trợ", message: "Vui lòng chọn tài liệu .txt, .md, .pdf hoặc .docx." });
       return;
     }
 
     try {
+      ragOperationInFlightRef.current = true;
       setIsUploadingRagDocument(true);
+      setRagFeedback({ status: "loading", title: "Đang tạo tài liệu", message: "Đang chuẩn bị tải tài liệu lên kho tri thức.", documentTitle: title, steps: ragUploadSteps, activeStep: 0 });
       const uploadUrlResponse = await ragDocumentsApi.createUploadUrl({
         contentType: RAG_DOCUMENT_UPLOAD_CONTENT_TYPE,
         description: description || null,
@@ -617,23 +631,26 @@ export default function AdminScreen() {
 
       createdDocumentId = uploadUrlResponse.data.documentId;
 
+      setRagFeedback({ status: "loading", title: "Đang tải tệp lên", message: "Đang tải nội dung tài liệu. Vui lòng giữ trang mở.", documentTitle: title, steps: ragUploadSteps, activeStep: 1 });
       await ragDocumentsApi.uploadFileToPresignedUrl(uploadUrlResponse.data.uploadUrl, asset.uri, asset.file ?? null);
+      setRagFeedback({ status: "loading", title: "Đang lập chỉ mục", message: "Đang xử lý tài liệu để sẵn sàng tra cứu trong kho tri thức.", documentTitle: title, steps: ragUploadSteps, activeStep: 2 });
       await ragDocumentsApi.confirm(createdDocumentId);
       setIsRagUploadVisible(false);
       setRagUploadForm(emptyRagUploadForm);
-      await loadAdminData({ refresh: true });
-      showAdminMessage("Upload thành công", "Tài liệu đã được upload và lập chỉ mục thành công.");
+      setRagFeedback({ status: "success", title: "Tải lên thành công", message: "Tài liệu đã được tải lên và lập chỉ mục, sẵn sàng sử dụng trong kho tri thức.", documentTitle: title });
+      void loadAdminData({ refresh: true, silent: true });
     } catch (error) {
       if (createdDocumentId !== null) {
-        await loadAdminData({ refresh: true });
+        setIsRagUploadVisible(false);
+        void loadAdminData({ refresh: true, silent: true });
       }
 
-      showAdminMessage(
-        createdDocumentId === null ? "Tạo tài liệu thất bại" : "Upload hoặc confirm thất bại",
-        getRequestErrorMessage(error),
-      );
+      setRagFeedback({ status: "error", title: createdDocumentId === null ? "Không tạo được tài liệu" : "Chưa hoàn tất tải lên",
+        message: createdDocumentId === null ? "Vui lòng kiểm tra thông tin và thử lại." : "Bản ghi tài liệu đã được tạo. Hãy kiểm tra trạng thái trong danh sách trước khi tải lại.",
+        documentTitle: title, details: getRequestErrorMessage(error) });
     } finally {
       setIsUploadingRagDocument(false);
+      ragOperationInFlightRef.current = false;
     }
   }
 
@@ -665,7 +682,7 @@ export default function AdminScreen() {
   }
 
   async function saveRagMetadata() {
-    if (!editingRagDocument) {
+    if (!editingRagDocument || ragOperationInFlightRef.current) {
       return;
     }
 
@@ -674,31 +691,40 @@ export default function AdminScreen() {
     const ragCategory = ragMetadataForm.ragCategory.trim() || "General";
 
     if (!title) {
-      showAdminMessage("Thiếu tiêu đề", "Vui lòng nhập tiêu đề tài liệu.");
+      setRagFeedback({ status: "error", title: "Thiếu tiêu đề", message: "Vui lòng nhập tiêu đề tài liệu." });
       return;
     }
 
     try {
+      ragOperationInFlightRef.current = true;
       setIsSavingRagMetadata(true);
+      setRagFeedback({ status: "loading", title: "Đang lưu thay đổi", message: "Đang cập nhật thông tin tài liệu trong kho tri thức.", documentTitle: title });
       await ragDocumentsApi.updateMetadata(editingRagDocument.id, {
         description,
         ragCategory,
         title,
       });
-      const response = await ragDocumentsApi.get(editingRagDocument.id);
-
+      // Lưu thành công vẫn là thành công nếu request tải lại chi tiết gặp lỗi.
+      let refreshWarning: string | undefined;
+      let updatedDocument: RagDocument = { ...editingRagDocument, title, description, ragCategory };
+      try {
+        updatedDocument = (await ragDocumentsApi.get(editingRagDocument.id)).data;
+      } catch {
+        refreshWarning = "Thay đổi đã được lưu nhưng chưa tải lại được chi tiết. Bạn có thể làm mới danh sách sau khi đóng thông báo.";
+      }
       setRagDocuments((current) =>
-        (current ?? []).map((document) => (document.id === editingRagDocument.id ? response.data : document)),
+        (current ?? []).map((document) => (document.id === editingRagDocument.id ? updatedDocument : document)),
       );
-      setSelectedRagDocument((current) => (current?.id === editingRagDocument.id ? response.data : current));
+      setSelectedRagDocument((current) => (current?.id === editingRagDocument.id ? updatedDocument : current));
       setIsRagMetadataVisible(false);
       setEditingRagDocument(null);
       setRagMetadataForm(emptyRagMetadataForm);
-      showAdminMessage("Đã lưu metadata", "Thông tin tài liệu đã được cập nhật.");
+      setRagFeedback({ status: "success", title: "Đã lưu thay đổi", message: "Thông tin tài liệu đã được cập nhật.", documentTitle: title, details: refreshWarning });
     } catch (error) {
-      showAdminMessage("Không lưu được metadata", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
+      setRagFeedback({ status: "error", title: "Không lưu được thay đổi", message: "Vui lòng kiểm tra thông báo lỗi và thử lại.", documentTitle: title, details: getRequestErrorMessage(error) });
     } finally {
       setIsSavingRagMetadata(false);
+      ragOperationInFlightRef.current = false;
     }
   }
 
@@ -708,19 +734,23 @@ export default function AdminScreen() {
   }
 
   async function deleteRagDocument(document: RagDocument) {
+    if (ragOperationInFlightRef.current) return;
     try {
+      ragOperationInFlightRef.current = true;
       setProcessingDocumentId(document.id);
+      setRagFeedback({ status: "loading", title: "Đang xóa tài liệu", message: "Đang xử lý yêu cầu xóa tài liệu.", documentTitle: document.title });
       await ragDocumentsApi.remove(document.id);
       setRagDocuments((current) => (current ?? []).filter((item) => item.id !== document.id));
       if (selectedRagDocument?.id === document.id) {
         setSelectedRagDocument(null);
         setIsRagDetailVisible(false);
       }
-      showAdminMessage("Đã xóa tài liệu", "Tài liệu RAG đã được xóa.");
+      setRagFeedback({ status: "success", title: "Đã xóa tài liệu", message: "Tài liệu đã được xóa khỏi danh sách.", documentTitle: document.title });
     } catch (error) {
-      showAdminMessage("Không xóa được tài liệu", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
+      setRagFeedback({ status: "error", title: "Không xóa được tài liệu", message: "Vui lòng kiểm tra thông báo lỗi và thử lại.", documentTitle: document.title, details: getRequestErrorMessage(error) });
     } finally {
       setProcessingDocumentId(null);
+      ragOperationInFlightRef.current = false;
     }
   }
 
@@ -736,26 +766,46 @@ export default function AdminScreen() {
         (current ?? []).map((item) => (item.id === document.id ? response.data : item)),
       );
     } catch (error) {
-      showAdminMessage("Không tải được chi tiết tài liệu", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
+      setRagFeedback({ status: "error", title: "Không tải được tài liệu", message: "Vui lòng thử mở lại chi tiết tài liệu.", documentTitle: document.title, details: getRequestErrorMessage(error) });
     } finally {
       setIsLoadingRagDetail(false);
     }
   }
 
   async function reindexRagDocument(document: RagDocument) {
+    if (ragOperationInFlightRef.current) return;
     try {
+      ragOperationInFlightRef.current = true;
       setProcessingDocumentId(document.id);
+      setRagFeedback({ status: "loading", title: "Đang lập chỉ mục lại", message: "Đang xử lý lại tài liệu. Bạn sẽ nhận được thông báo khi hoàn tất.", documentTitle: document.title });
       await ragDocumentsApi.reindex(document.id);
-      const response = await ragDocumentsApi.get(document.id);
+      let refreshWarning: string | undefined;
+      let updatedDocument: RagDocument = { ...document, status: "Indexed", errorMessage: null };
+      try {
+        updatedDocument = (await ragDocumentsApi.get(document.id)).data;
+      } catch {
+        refreshWarning = "Lập chỉ mục đã hoàn tất nhưng chưa tải lại được chi tiết. Hãy làm mới danh sách để xem số liệu mới nhất.";
+      }
       setRagDocuments((current) =>
-        (current ?? []).map((item) => (item.id === document.id ? response.data : item)),
+        (current ?? []).map((item) => (item.id === document.id ? updatedDocument : item)),
       );
-      setSelectedRagDocument((current) => (current?.id === document.id ? response.data : current));
-      showAdminMessage("Đã chạy reindex", "Yêu cầu indexing lại đã hoàn tất.");
+      setSelectedRagDocument((current) => (current?.id === document.id ? updatedDocument : current));
+      setRagFeedback({ status: "success", title: "Lập chỉ mục lại thành công", message: "Tài liệu đã được xử lý lại và sẵn sàng tra cứu.", documentTitle: document.title, details: refreshWarning });
     } catch (error) {
-      showAdminMessage("Không chạy lại indexing", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
+      setRagFeedback({ status: "error", title: "Không lập chỉ mục lại được", message: "Hãy kiểm tra thông báo lỗi và thử lại khi tài liệu sẵn sàng.", documentTitle: document.title, details: getRequestErrorMessage(error) });
+      // Lấy lại trạng thái Failed/ErrorMessage mà backend đã lưu sau lỗi index.
+      try {
+        const response = await ragDocumentsApi.get(document.id);
+        setRagDocuments((current) =>
+          (current ?? []).map((item) => (item.id === document.id ? response.data : item)),
+        );
+        setSelectedRagDocument((current) => (current?.id === document.id ? response.data : current));
+      } catch {
+        // Giữ nguyên lỗi reindex để hiển thị nếu request làm mới cũng thất bại.
+      }
     } finally {
       setProcessingDocumentId(null);
+      ragOperationInFlightRef.current = false;
     }
   }
 
@@ -1092,7 +1142,22 @@ export default function AdminScreen() {
                 />
               }
             >
-              {ragDocuments.length === 0 ? (
+              {ragLoadWarning && !isLoading ? (
+                <View style={styles.loadWarningCard} accessibilityLiveRegion="polite">
+                  <Text style={styles.loadWarningText}>{ragLoadWarning}</Text>
+                  <Pressable accessibilityRole="button" style={styles.fullSaveButton} disabled={isRefreshing}
+                    onPress={() => void loadAdminData({ refresh: true, silent: true })}>
+                    <Text style={styles.fullSaveButtonText}>{isRefreshing ? "Đang tải lại…" : "Thử tải lại"}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {isLoading || isRefreshing ? (
+                <View style={styles.loadingCard} accessibilityLiveRegion="polite">
+                  <ActivityIndicator color={theme.primary} />
+                  <Text style={styles.loadingText}>{isLoading ? "Đang tải tài liệu…" : "Đang làm mới danh sách…"}</Text>
+                </View>
+              ) : null}
+              {isLoading || (isRefreshing && ragDocuments.length === 0) ? null : ragDocuments.length === 0 ? (ragLoadWarning ? null : (
                 <View style={styles.emptyDocumentCard}>
                   <Text style={styles.emptyDocumentTitle}>Chưa có tài liệu</Text>
                   <Text style={styles.emptyDocumentText}>Upload tài liệu đầu tiên để tạo nguồn dữ liệu RAG.</Text>
@@ -1100,12 +1165,12 @@ export default function AdminScreen() {
                     <Text style={styles.fullSaveButtonText}>Upload tài liệu</Text>
                   </Pressable>
                 </View>
-              ) : (
+              )) : (
                 ragDocuments.map((document) => (
                   <RagDocumentRow
                     key={document.id}
                     document={document}
-                    isProcessing={processingDocumentId === document.id}
+                    isProcessing={processingDocumentId === document.id || document.status === "Processing"}
                     onDelete={() => requestDeleteRagDocument(document)}
                     onMore={() => setActionMenuRagDocument(document)}
                   />
@@ -1129,7 +1194,7 @@ export default function AdminScreen() {
             />
             <RagActionMenuModal
               document={actionMenuRagDocument}
-              isProcessing={actionMenuRagDocument ? processingDocumentId === actionMenuRagDocument.id : false}
+              isProcessing={actionMenuRagDocument ? processingDocumentId === actionMenuRagDocument.id || actionMenuRagDocument.status === "Processing" : false}
               onClose={() => setActionMenuRagDocument(null)}
               onDelete={() => {
                 if (actionMenuRagDocument) {
@@ -1161,7 +1226,7 @@ export default function AdminScreen() {
             <RagDetailModal
               document={selectedRagDocument}
               isLoading={isLoadingRagDetail}
-              isProcessing={selectedRagDocument ? processingDocumentId === selectedRagDocument.id : false}
+              isProcessing={selectedRagDocument ? processingDocumentId === selectedRagDocument.id || selectedRagDocument.status === "Processing" : false}
               onClose={() => {
                 setIsRagDetailVisible(false);
                 setSelectedRagDocument(null);
@@ -1279,6 +1344,7 @@ export default function AdminScreen() {
     <AdminShell view={view} onNavigate={navigateAdmin} name={currentUser?.displayName ?? currentUser?.username ?? "Admin"} onLogout={confirmLogout} isLoggingOut={isLoggingOut}>
       <View style={[styles.screen, view === "training" && styles.hidden]}>{renderContent()}</View>
       {hasOpenedTraining ? <View style={[styles.screen, view !== "training" && styles.hidden]}><ForecastTrainingWorkspace active={view === "training"} renderResult={result => <ForecastTrainingResult result={result} />} /></View> : null}
+      <RagOperationDialog feedback={ragFeedback} onClose={() => setRagFeedback((current) => current?.status === "loading" ? current : null)} />
     </AdminShell>
   );
 }
@@ -1311,6 +1377,21 @@ function AdminUserRow({ user, onPress, compact = false }: { user: AdminUser; onP
   </Pressable>;
 }
 
+function RagDocumentStatusBadge({ document }: { document: RagDocument }) {
+  const theme = useAdminTheme();
+  const styles = useAdminStyles();
+  const status = document.status;
+  const label = { Indexed: "Sẵn sàng", Processing: "Đang xử lý", Failed: "Lỗi xử lý", Draft: "Bản nháp" }[status] ?? getRagDocumentStatusLabel(document);
+  const color = status === "Failed" ? theme.dangerText : status === "Indexed" ? theme.goodText : status === "Processing" ? theme.warning : theme.textMuted;
+  return (
+    <View style={[styles.documentStatusBadge, status === "Indexed" && styles.documentStatusGood,
+      status === "Failed" && styles.documentStatusDanger, status === "Processing" && styles.documentStatusWarning]}>
+      {status === "Processing" ? <ActivityIndicator size="small" color={color} /> : null}
+      <Text style={[styles.documentStatusText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
 function RagDocumentRow({
   document,
   isProcessing,
@@ -1335,6 +1416,7 @@ function RagDocumentRow({
               {document.fileName} · v{document.version} · {document.chunkCount} chunks
             </Text>
           </View>
+          <RagDocumentStatusBadge document={document} />
         </View>
 
         <Text numberOfLines={2} style={styles.documentDescription}>
@@ -1506,15 +1588,19 @@ function RagDetailModal({
             </View>
           ) : document ? (
             <ScrollView contentContainerStyle={styles.detailContent}>
+              {isLoading ? (
+                <View style={styles.loadingCard} accessibilityLiveRegion="polite">
+                  <ActivityIndicator />
+                  <Text style={styles.loadingText}>Đang tải chi tiết mới nhất…</Text>
+                </View>
+              ) : null}
               <View style={styles.documentCard}>
                 <View style={styles.documentTopRow}>
                   <View style={styles.rowCopy}>
                     <Text style={styles.rowTitle}>{document.title}</Text>
                     <Text style={styles.rowSubtitle}>{document.fileName}</Text>
                   </View>
-                  <View style={styles.documentStatusBadge}>
-                    <Text style={styles.documentStatusText}>{statusLabel}</Text>
-                  </View>
+                  <RagDocumentStatusBadge document={document} />
                 </View>
                 <Text style={styles.documentDescription}>{document.description || "Không có mô tả"}</Text>
                 {document.errorMessage ? <Text style={styles.documentError}>{document.errorMessage}</Text> : null}
@@ -1735,7 +1821,7 @@ function RagMetadataModal({
                 value={form.ragCategory}
               />
             </View>
-            <Pressable style={[styles.fullSaveButton, isSaving && styles.disabledText]} onPress={onSubmit}>
+            <Pressable style={[styles.fullSaveButton, isSaving && styles.disabledText]} onPress={onSubmit} disabled={isSaving}>
               {isSaving ? (
                 <ActivityIndicator color={theme.textInverse} />
               ) : (
@@ -2155,6 +2241,9 @@ function createStyles(theme: AdminTheme, isDesktop: boolean) {
     },
     documentError: { color: theme.dangerText, fontSize: 12, fontWeight: "500", lineHeight: 18 },
     documentStatusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
       backgroundColor: theme.cardAlt,
       borderRadius: 12,
       paddingHorizontal: 9,
