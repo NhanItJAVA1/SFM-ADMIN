@@ -63,7 +63,7 @@ export default function AdminLoginScreen() {
             </View>
             <View style={styles.brandCopy}>
               <Text style={styles.eyebrow}>ADMINISTRATION CONSOLE</Text>
-              <Text style={styles.heroTitle}>Quản trị hệ thống{ '\n' }tài chính của bạn.</Text>
+              <Text style={styles.heroTitle}>Quản trị hệ thống{'\n'}tài chính của bạn.</Text>
               <Text style={styles.heroDescription}>Một không gian tập trung để quản lý người dùng, dữ liệu và vận hành SFM.</Text>
             </View>
             <View style={styles.brandFooter}>
@@ -84,8 +84,6 @@ export default function AdminLoginScreen() {
           <View style={styles.formHeader}>
             <View style={styles.formIcon}><LockKeyhole size={20} color="#8bc9a9" /></View>
             <Text style={styles.formKicker}>ADMIN ACCESS</Text>
-            <Text style={styles.formTitle}>Chào mừng trở lại</Text>
-            <Text style={styles.formDescription}>Đăng nhập bằng tài khoản quản trị SFM của bạn.</Text>
           </View>
 
           <View style={styles.fields}>
