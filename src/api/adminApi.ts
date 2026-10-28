@@ -158,14 +158,14 @@ export const adminApi = {
     axiosClient.get<AdminMonitoringTimeseries>(`/v1/admin/monitoring/timeseries?${new URLSearchParams({ range, step: '15s' })}`, { signal, timeout: 20000 }),
   monitoringOverview: (signal?: AbortSignal) =>
     axiosClient.get<AdminMonitoringOverview | null>('/v1/admin/monitoring/overview', { signal, timeout: 20000 }),
-  listUsers: (params: AdminUserQuery = {}) =>
-    axiosClient.get<AdminUserPagedResponse | AdminUser[]>(`/v1/admin/users${buildQuery(params)}`),
+  listUsers: (params: AdminUserQuery = {}, signal?: AbortSignal) =>
+    axiosClient.get<AdminUserPagedResponse | AdminUser[]>(`/v1/admin/users${buildQuery(params)}`, { signal }),
   getUser: (id: number) => axiosClient.get<AdminUser>(`/v1/admin/users/${id}`),
   updateUserStatus: (id: number, payload: UpdateAdminUserStatusPayload) =>
     axiosClient.patch<AdminUser>(`/v1/admin/users/${id}/status`, payload),
   updateUserRole: (id: number, payload: UpdateAdminUserRolePayload) =>
     axiosClient.patch<AdminUser>(`/v1/admin/users/${id}/role`, payload),
-  listDefaultCategories: () => axiosClient.get<Category[]>('/v1/admin/categories'),
+  listDefaultCategories: (signal?: AbortSignal) => axiosClient.get<Category[]>('/v1/admin/categories', { signal }),
   createDefaultCategory: (payload: AdminCategoryPayload) =>
     axiosClient.post<Category>('/v1/admin/categories', payload),
   updateDefaultCategory: (id: number, payload: AdminCategoryPayload) =>

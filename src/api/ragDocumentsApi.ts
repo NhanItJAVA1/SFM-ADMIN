@@ -53,8 +53,8 @@ function unwrapDocuments(data: ListResponse) {
   return Array.isArray(data.data) ? data.data : [];
 }
 
-async function listDocuments() {
-  const response = await axiosClient.get<ListResponse>("/v1/rag-documents");
+async function listDocuments(signal?: AbortSignal) {
+  const response = await axiosClient.get<ListResponse>("/v1/rag-documents", { signal });
 
   return {
     ...response,

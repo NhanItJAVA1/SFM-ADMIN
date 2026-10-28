@@ -7,7 +7,7 @@ import { aiApi, type ForecastTrainingResponse } from '@/api/aiApi';
 import type { AdminUser } from '@/api/adminApi';
 import { BottomPopup, BottomPopupSheet } from '@/components/bottom-popup';
 import { FocusedScreenTransition } from '@/components/screen-transition';
-import { adminStyleSheet, useAdminTheme, type AdminTheme } from './admin-design';
+import { adminStyleSheet, useAdminTheme, type AdminTheme } from '../admin-design';
 import { ForecastModelVersions } from './forecast-model-versions';
 import { canTrainUser, getTrainingErrorMessage, getTrainingUserIssue, isTrainingDateValid, loadTrainingUsers } from './training-users';
 

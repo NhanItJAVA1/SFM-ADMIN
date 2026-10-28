@@ -1,7 +1,7 @@
 import { Check, CheckCircle2, CircleAlert, X } from "lucide-react-native";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
 
-import { adminStyleSheet, useAdminTheme } from "./admin-design";
+import { adminStyleSheet, useAdminTheme } from "../admin-design";
 
 export type RagOperationFeedback = {
   status: "loading" | "success" | "error";
