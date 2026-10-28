@@ -9,6 +9,39 @@ import { InfoRow, formatDate } from "@/components/admin/admin-page-shared";
 import { BottomPopup, BottomPopupSheet } from "@/components/bottom-popup";
 import type { RagDocumentsController, RagMetadataFormState, RagUploadFormState } from "./use-rag-documents";
 
+function RagDeleteConfirmationModal({ document, onClose, onConfirm }: {
+  document: RagDocument | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const theme = useAdminTheme();
+  const styles = useAdminStyles();
+  return (
+    <BottomPopup transparent visible={document !== null} onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <Pressable style={styles.modalBackdrop} onPress={onClose} />
+        <BottomPopupSheet style={styles.categoryFormSheet}>
+          <View style={styles.formHeader}>
+            <Pressable accessibilityRole="button" onPress={onClose} hitSlop={10}><Text style={styles.formClose}>Hủy</Text></Pressable>
+            <Text style={styles.formTitle}>Xóa tài liệu RAG?</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.formBody}>
+            <Text style={styles.rowTitle}>{document?.title}</Text>
+            <Text style={styles.documentDescription}>Tài liệu, tệp gốc và dữ liệu tra cứu liên quan sẽ bị xóa. Thao tác này không thể hoàn tác.</Text>
+            <Pressable accessibilityRole="button" onPress={onConfirm} style={[styles.fullSaveButton, { backgroundColor: theme.danger }]}>
+              <Text style={[styles.fullSaveButtonText, { color: "#ffffff" }]}>Xóa tài liệu</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={onClose} style={styles.documentActionButton}>
+              <Text style={styles.documentActionText}>Giữ lại tài liệu</Text>
+            </Pressable>
+          </View>
+        </BottomPopupSheet>
+      </View>
+    </BottomPopup>
+  );
+}
+
 function getRagDocumentStatusLabel(document: RagDocument) {
   return document.statusName || document.status;
 }
@@ -32,6 +65,7 @@ export function RagDocumentModals({ controller }: { controller: RagDocumentsCont
     <RagActionMenuModal {...controller.menu} />
     <RagDetailModal {...controller.detail} />
     <RagMetadataModal {...controller.metadata} theme={theme} />
+    <RagDeleteConfirmationModal {...controller.deleteConfirmation} />
   </>;
 }
 

@@ -2,7 +2,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useRef, useState } from "react";
 
 import { RAG_DOCUMENT_UPLOAD_CONTENT_TYPE, ragDocumentsApi, type RagDocument } from "@/api/ragDocumentsApi";
-import { confirmAdminAction, getRequestErrorMessage } from "@/components/admin/admin-page-shared";
+import { getRequestErrorMessage } from "@/components/admin/admin-page-shared";
 import { useAdminPageActive, useAdminResource } from "@/hooks/use-admin-resource";
 import type { RagOperationFeedback } from "./rag-operation-dialog";
 
@@ -85,6 +85,7 @@ export function useRagDocuments() {
   const [processingDocumentId, setProcessingDocumentId] = useState<number | null>(null);
 
   const [ragFeedback, setRagFeedback] = useState<RagOperationFeedback | null>(null);
+  const [documentToDelete, setDocumentToDelete] = useState<RagDocument | null>(null);
 
   const ragOperationInFlightRef = useRef(false);
 
@@ -272,8 +273,13 @@ export function useRagDocuments() {
   }
 
   function requestDeleteRagDocument(document: RagDocument) {
+    if (ragOperationInFlightRef.current) return;
     setActionMenuRagDocument(null);
-    confirmAdminAction("Xóa tài liệu RAG", `Bạn muốn xóa "${document.title}"?`, () => void deleteRagDocument(document), "Xóa", true);
+    if (document.status === "Processing") {
+      setRagFeedback({ status: "error", title: "Tài liệu đang được xử lý", message: "Vui lòng chờ quá trình lập chỉ mục hoàn tất trước khi xóa.", documentTitle: document.title });
+      return;
+    }
+    setDocumentToDelete(document);
   }
 
   async function deleteRagDocument(document: RagDocument) {
@@ -281,16 +287,18 @@ export function useRagDocuments() {
     try {
       ragOperationInFlightRef.current = true;
       setProcessingDocumentId(document.id);
-      setRagFeedback({ status: "loading", title: "Đang xóa tài liệu", message: "Đang xử lý yêu cầu xóa tài liệu.", documentTitle: document.title });
+      setIsRagDetailVisible(false);
+      setRagFeedback({ status: "loading", title: "Đang xóa tài liệu", message: "Đang xóa tài liệu và dữ liệu liên quan khỏi kho tri thức.", documentTitle: document.title });
       await ragDocumentsApi.remove(document.id);
       setRagDocuments((current) => (current ?? []).filter((item) => item.id !== document.id));
       if (selectedRagDocument?.id === document.id) {
         setSelectedRagDocument(null);
         setIsRagDetailVisible(false);
       }
-      setRagFeedback({ status: "success", title: "Đã xóa tài liệu", message: "Tài liệu đã được xóa khỏi danh sách.", documentTitle: document.title });
+      setRagFeedback({ status: "success", title: "Đã xóa tài liệu", message: "Tài liệu, tệp gốc và dữ liệu tra cứu liên quan đã được xóa.", documentTitle: document.title });
     } catch (error) {
-      setRagFeedback({ status: "error", title: "Không xóa được tài liệu", message: "Vui lòng kiểm tra thông báo lỗi và thử lại.", documentTitle: document.title, details: getRequestErrorMessage(error) });
+      setRagFeedback({ status: "error", title: "Yêu cầu xóa chưa hoàn tất", message: "Vui lòng kiểm tra thông báo lỗi và thử xóa lại. Danh sách đang được cập nhật theo trạng thái mới nhất.", documentTitle: document.title, details: getRequestErrorMessage(error) });
+      void loadDocuments({ refresh: true, silent: true });
     } finally {
       setProcessingDocumentId(null);
       ragOperationInFlightRef.current = false;
@@ -363,6 +371,16 @@ export function useRagDocuments() {
     requestDelete: requestDeleteRagDocument,
     feedback: pageActive ? ragFeedback : null,
     closeFeedback: () => setRagFeedback(current => current?.status === "loading" ? current : null),
+    deleteConfirmation: {
+      document: pageActive ? documentToDelete : null,
+      onClose: () => setDocumentToDelete(null),
+      onConfirm: () => {
+        if (!documentToDelete || ragOperationInFlightRef.current) return;
+        const document = documentToDelete;
+        setDocumentToDelete(null);
+        void deleteRagDocument(document);
+      },
+    },
     upload: {
       form: ragUploadForm,
       isUploading: isUploadingRagDocument,
