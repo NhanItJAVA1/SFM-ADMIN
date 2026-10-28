@@ -1,0 +1,323 @@
+import { Platform } from "react-native";
+
+import { axiosClient } from "./axiosClient";
+
+export type TransactionDraftItem = {
+  name?: string | null;
+  quantity?: number | null;
+  unitPrice?: number | null;
+  amount?: number | null;
+};
+
+export type TransactionDraft = {
+  accountId?: number | null;
+  categoryId?: number | null;
+  type?: string | null;
+  amount?: number | null;
+  description?: string | null;
+  transactionDate?: string | null;
+  location?: string | null;
+  merchantName?: string | null;
+  isExcluded?: boolean | null;
+  confidence?: number | null;
+  rawText?: string | null;
+  items?: TransactionDraftItem[] | null;
+  itemsTotal?: number | null;
+  difference?: number | null;
+  [key: string]: unknown;
+};
+
+export type ScanBillResponse = TransactionDraft;
+
+export type BillImageUpload = {
+  uri: string;
+  name?: string | null;
+  type?: string | null;
+  /** Browser File provided by expo-image-picker on web. */
+  file?: Blob | null;
+};
+
+function inferImageMimeType(fileName?: string | null) {
+  const extension = fileName?.split(".").pop()?.toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    avif: "image/avif",
+    bmp: "image/bmp",
+    gif: "image/gif",
+    heic: "image/heic",
+    heif: "image/heif",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+  };
+
+  return extension ? mimeTypes[extension] ?? "application/octet-stream" : "application/octet-stream";
+}
+
+export type CreateTransactionFromScanPayload = {
+  accountId: number;
+  categoryId?: number | null;
+  type: string;
+  amount?: number | null;
+  description?: string | null;
+  transactionDate?: string | null;
+  location?: string | null;
+  isExcluded: boolean;
+  items: TransactionDraftItem[];
+};
+
+export type TransactionNotification = {
+  type?: string | null;
+  budgetId?: number | null;
+  level?: "Warning" | "Critical" | string | null;
+  title?: string | null;
+  body?: string | null;
+  message?: string | null;
+  [key: string]: unknown;
+};
+
+export type CreateTransactionFromScanResponse = {
+  notifications?: TransactionNotification[] | null;
+  notification?: TransactionNotification | null;
+  [key: string]: unknown;
+};
+
+export type SpendingPeriod = {
+  month: number;
+  year: number;
+  start: string;
+  end: string;
+};
+
+export type CategorySpendingItem = {
+  categoryId: number | null;
+  categoryName: string;
+  icon: string | null;
+  amount: number;
+  compareAmount: number;
+  percentage: number;
+  changePercentage: number | null;
+  transactionCount: number;
+  isUncategorized: boolean;
+};
+
+export type CategorySpendingResponse = {
+  currentPeriod: SpendingPeriod;
+  comparePeriod: SpendingPeriod;
+  totalAmount: number;
+  compareTotalAmount: number;
+  totalChangePercentage: number | null;
+  categories: CategorySpendingItem[];
+};
+
+export type CategorySpendingParams = {
+  month?: number;
+  year?: number;
+  compareMonth?: number;
+  compareYear?: number;
+};
+
+export type TransactionListParams = {
+  accountId?: number | null;
+  categoryId?: number | null;
+  filter?: "NotDeleted" | "Deleted" | "All";
+  fromDate?: string;
+  page?: number;
+  pageSize?: number;
+  toDate?: string;
+  uncategorized?: boolean;
+};
+
+export type TransactionDateRangeParams = {
+  fromDate: string;
+  toDate: string;
+  accountId?: number | null;
+  filter?: "NotDeleted" | "Deleted" | "All";
+};
+
+export type ExportTransactionsParams = {
+  accountId?: number | null;
+  fromDate?: string;
+  toDate?: string;
+};
+
+export type TransactionType = "Income" | "Expense" | "TransferIn" | "TransferOut";
+
+export type Transaction = {
+  id: number;
+  userId: number;
+  accountId: number;
+  categoryId: number | null;
+  categoryName: string;
+  type: TransactionType;
+  amount: number;
+  description: string | null;
+  transactionDate: string;
+  location: string | null;
+  isExcluded: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+};
+
+export type PagedTransactionResponse = {
+  items: Transaction[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+};
+
+export type CreateTransactionPayload = {
+  accountId: number;
+  categoryId?: number | null;
+  type: TransactionType;
+  amount: number;
+  description?: string | null;
+  transactionDate?: string | null;
+  location?: string | null;
+  isExcluded?: boolean;
+};
+
+function buildQuery(params: Record<string, number | string | null | undefined>) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (typeof value === "number") {
+      searchParams.set(key, String(value));
+      return;
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      searchParams.set(key, value);
+    }
+  });
+
+  const query = searchParams.toString();
+
+  return query ? `?${query}` : "";
+}
+
+export function buildCreateTransactionFromScanPayload(
+  draft: TransactionDraft,
+  accountId: number,
+): CreateTransactionFromScanPayload {
+  const items = Array.isArray(draft.items)
+    ? draft.items.map((item) => ({
+        name: item.name ?? null,
+        quantity: item.quantity ?? null,
+        unitPrice: item.unitPrice ?? null,
+        amount: item.amount ?? null,
+      }))
+    : [];
+
+  return {
+    accountId,
+    categoryId: draft.categoryId ?? null,
+    type: draft.type ?? "Expense",
+    amount: draft.amount ?? null,
+    description: draft.description ?? draft.merchantName ?? null,
+    transactionDate: draft.transactionDate ?? null,
+    location: draft.location ?? null,
+    isExcluded: draft.isExcluded ?? false,
+    items,
+  };
+}
+
+async function listTransactionPage(params: TransactionListParams = {}) {
+  const response = await axiosClient.get<PagedTransactionResponse | Transaction[]>(
+    `/v1/transactions${buildQuery({
+      accountId: params.accountId,
+      categoryId: params.categoryId,
+      filter: params.filter,
+      fromDate: params.fromDate,
+      page: params.page,
+      pageSize: params.pageSize,
+      toDate: params.toDate,
+      uncategorized: params.uncategorized ? "true" : undefined,
+    })}`,
+  );
+
+  if (Array.isArray(response.data)) {
+    const allItems = validTransactionItems(response.data).sort(compareTransactionsNewestFirst);
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = Math.max(1, params.pageSize ?? 20);
+    const startIndex = (page - 1) * pageSize;
+    const items = allItems.slice(startIndex, startIndex + pageSize);
+
+    return {
+      ...response,
+      data: {
+        items,
+        page,
+        pageSize,
+        totalCount: allItems.length,
+        totalPages: Math.max(1, Math.ceil(allItems.length / pageSize)),
+      },
+    };
+  }
+
+  return {
+    ...response,
+    data: {
+      ...response.data,
+      items: validTransactionItems(response.data.items),
+    },
+  };
+}
+
+function validTransactionItems(items: Transaction[] | null | undefined) {
+  return Array.isArray(items) ? items.filter((item): item is Transaction => item != null) : [];
+}
+
+function compareTransactionsNewestFirst(left: Transaction, right: Transaction) {
+  const dateDifference = new Date(right.transactionDate).getTime() - new Date(left.transactionDate).getTime();
+
+  return dateDifference || right.id - left.id;
+}
+
+export const transactionsApi = {
+  scanBill: async (image: BillImageUpload) => {
+    const formData = new FormData();
+    const extension = image.name?.split(".").pop()?.toLowerCase();
+    const mimeType = image.type || inferImageMimeType(image.name);
+    const fileName = image.name || `bill-${Date.now()}${extension ? `.${extension}` : ""}`;
+
+    if (Platform.OS === "web") {
+      const file = image.file ?? await (await fetch(image.uri)).blob();
+      formData.append("image", file, fileName);
+    } else {
+      // React Native's FormData adapter reads the local file from its URI.
+      formData.append("image", { uri: image.uri, name: fileName, type: mimeType } as unknown as Blob);
+    }
+
+    if (__DEV__) {
+      console.debug("[scan-bill] Uploading image", { name: fileName, type: mimeType, platform: Platform.OS });
+    }
+
+    return axiosClient.uploadFormData<ScanBillResponse>("/v1/transactions/scan-bill", formData);
+  },
+  createFromScan: (payload: CreateTransactionFromScanPayload) =>
+    axiosClient.post<CreateTransactionFromScanResponse>("/v1/transactions", payload),
+  categorySpending: (params: CategorySpendingParams = {}) =>
+    axiosClient.get<CategorySpendingResponse>(`/v1/transactions/category-spending${buildQuery(params)}`),
+  dateRange: (params: TransactionDateRangeParams) =>
+    axiosClient.get<Transaction[]>(
+      `/v1/transactions/date-range${buildQuery({
+        fromDate: params.fromDate,
+        toDate: params.toDate,
+        accountId: params.accountId,
+        filter: params.filter,
+      })}`,
+    ),
+  list: listTransactionPage,
+  exportTransactions: (params: ExportTransactionsParams = {}) =>
+    axiosClient.getBinary(
+      `/v1/transactions/export${buildQuery({
+        accountId: params.accountId,
+        fromDate: params.fromDate,
+        toDate: params.toDate,
+      })}`,
+    ),
+  create: (payload: CreateTransactionPayload) =>
+    axiosClient.post<CreateTransactionFromScanResponse>("/v1/transactions", payload),
+};

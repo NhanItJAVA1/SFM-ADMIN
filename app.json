@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "SFM Admin",
+    "slug": "sfm-admin",
+    "version": "1.0.0",
+    "scheme": "sfmadmin",
+    "orientation": "landscape",
+    "userInterfaceStyle": "automatic",
+    "web": { "bundler": "metro", "output": "static" },
+    "plugins": ["expo-router", "expo-secure-store", "@react-native-community/datetimepicker"],
+    "experiments": { "typedRoutes": true }
+  }
+}
