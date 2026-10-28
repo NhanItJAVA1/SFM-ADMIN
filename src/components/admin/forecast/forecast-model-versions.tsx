@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { aiApi, type ForecastModelArtifact, type ForecastTrainingResponse, type ForecastVersion, type ForecastVersionPage } from '@/api/aiApi';
-import { adminStyleSheet, useAdminTheme, type AdminTheme } from './admin-design';
+import { adminStyleSheet, useAdminTheme, type AdminTheme } from '../admin-design';
 import { ForecastTrainingResult } from './forecast-training-result';
 
 const pageSize = 10;
@@ -171,7 +171,7 @@ export function ForecastModelVersions({ active, busy = false, refreshKey, onTrai
       <View style={styles.footer}><Text style={styles.help}>{data.total} phiên bản · Chỉ so sánh điểm giữa các model trên cùng tập đánh giá.</Text><View style={styles.actions}><Pressable accessibilityRole="button" accessibilityLabel="Trang phiên bản trước" disabled={page === 0 || loading || unavailable} onPress={() => setPage(page - 1)} style={[styles.icon, page === 0 && styles.disabled]}><ChevronLeft size={17} color={theme.text} /></Pressable><Text style={styles.text}>{page + 1} / {totalPages}</Text><Pressable accessibilityRole="button" accessibilityLabel="Trang phiên bản sau" disabled={page + 1 >= totalPages || loading || unavailable} onPress={() => setPage(page + 1)} style={[styles.icon, page + 1 >= totalPages && styles.disabled]}><ChevronRight size={17} color={theme.text} /></Pressable></View></View>
     </View> : null}
 
-    <Modal transparent visible={opening !== null} animationType="fade" onRequestClose={close}>
+    <Modal transparent visible={active && opening !== null} animationType="fade" onRequestClose={close}>
       <View style={styles.overlay}><View style={[styles.dialog, { height: Math.min(height * .9, 960) }]}>
         <View style={styles.dialogHeader}><View style={styles.grow}><Text style={styles.title}>Chi tiết phiên bản</Text><Text selectable style={styles.help}>{opening}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Đóng chi tiết phiên bản" onPress={close} style={styles.icon}><X size={20} color={theme.text} /></Pressable></View>
         {!detail ? <View style={styles.empty}><ActivityIndicator color={theme.primary} /></View> : <>
@@ -212,7 +212,7 @@ export function ForecastModelVersions({ active, busy = false, refreshKey, onTrai
       </View></View>
     </Modal>
 
-    <Modal transparent visible={confirmation !== null} animationType="fade" onRequestClose={() => { if (!changing) setConfirmation(null); }}>
+    <Modal transparent visible={active && confirmation !== null} animationType="fade" onRequestClose={() => { if (!changing) setConfirmation(null); }}>
       <View style={styles.overlay}><View style={styles.confirmDialog}>
         <Text style={styles.title}>{confirmation?.action === 'delete' ? 'Xóa phiên bản này?' : 'Sử dụng phiên bản này?'}</Text>
         <Text selectable style={styles.version}>{confirmation?.run.modelVersion}</Text>

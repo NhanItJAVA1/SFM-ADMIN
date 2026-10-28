@@ -117,7 +117,7 @@ function message(error: unknown) {
   );
 }
 
-export function AnalysisConfigWorkspace() {
+export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } = {}) {
   const theme = useAdminTheme();
   const styles = adminStyleSheet({
     screen: { flex: 1, backgroundColor: theme.screen },
@@ -525,7 +525,7 @@ export function AnalysisConfigWorkspace() {
         </>
       ) : null}
       <Modal
-        visible={confirmation !== null}
+        visible={active && confirmation !== null}
         transparent
         animationType="fade"
         onRequestClose={() => {

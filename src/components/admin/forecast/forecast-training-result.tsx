@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import type { ForecastTrainingResponse } from '@/api/aiApi';
-import { adminStyleSheet, useAdminTheme, type AdminTheme } from './admin-design';
+import { adminStyleSheet, useAdminTheme, type AdminTheme } from '../admin-design';
 import { formatResultDate, formatResultNumber as number, getComparison, getModelLabel, summarizeTrainingResult, type ComparisonMetric, type ComparisonSplit } from './training-result-summary';
 
 export function ForecastTrainingResult({ result }: { result: ForecastTrainingResponse }) {
