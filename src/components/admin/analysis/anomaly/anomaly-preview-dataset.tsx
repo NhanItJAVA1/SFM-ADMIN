@@ -42,8 +42,8 @@ function median(values: number[]) {
   return sorted.length ? sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2 : 0;
 }
 
-export function AnomalyPreviewDataset({ state, amount, preview }: {
-  state: ReturnType<typeof useAnomalyPreviewDataset>; amount: number; preview: AnalysisPreview | null;
+export function AnomalyPreviewDataset({ state, amount, balance, preview }: {
+  state: ReturnType<typeof useAnomalyPreviewDataset>; amount: number; balance: number; preview: AnalysisPreview | null;
 }) {
   const theme = useAdminTheme();
   const styles = createStyles(theme);
@@ -59,6 +59,8 @@ export function AnomalyPreviewDataset({ state, amount, preview }: {
   const categoryRows = data.transactions.filter(row => row.category === data.target.category);
   const categoryMedian = median(categoryRows.map(row => row.amount));
   const ratio = categoryMedian > 0 && Number.isFinite(amount) ? amount / categoryMedian : null;
+  const balanceShare = data.policy.balanceShareLimit;
+  const balanceThreshold = Math.max(balance, 0) * balanceShare;
   const flagged = new Set(preview?.anomaly.summary.assessments.filter(row => row.status === "anomaly").map(row => row.transactionId).filter((id): id is number => id !== null) ?? []);
   const stats = [
     ["Khoản nhỏ nhất", vnd(Math.min(...amounts))], ["Khoản lớn nhất", vnd(Math.max(...amounts))],
@@ -94,8 +96,8 @@ export function AnomalyPreviewDataset({ state, amount, preview }: {
     <View style={styles.target}>
       <View style={styles.heading}><Text style={styles.title}>2. Nhập khoản chi thứ {data.sampleExpenseCount}</Text><Text style={styles.help}>{dateLabel(data.target.date)} · {data.target.category}</Text></View>
       <Text style={styles.help}>Khoản đang thử: <Text style={styles.emphasis}>{Number.isFinite(amount) ? vnd(amount) : "Chưa nhập"}</Text>{ratio !== null ? ` · Gấp ${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(ratio)} lần trung vị ${data.target.category.toLocaleLowerCase("vi-VN")} (${categoryRows.length} mẫu).` : ""}</Text>
-      <Text style={styles.small}>Các khoản nền chỉ dùng làm lịch sử tham chiếu. Xem thử chấm riêng khoản bạn nhập và trả kết quả bình thường hoặc bất thường khi đủ dữ liệu tham chiếu.</Text>
-      {data.policy ? <Text style={styles.small}>Cần ít nhất {data.policy.categoryMinCount} mẫu cùng danh mục, mốc so sánh hợp lệ và đủ dữ liệu cho model để bắt đầu đánh giá. Thiếu điều kiện nào cũng trả “Chưa đủ dữ liệu”.</Text> : null}
+      <Text style={styles.help}>Số dư hiện tại: <Text style={styles.emphasis}>{Number.isFinite(balance) ? vnd(balance) : "Chưa nhập"}</Text> · Ngưỡng đánh dấu trực tiếp ({new Intl.NumberFormat("vi-VN").format(balanceShare * 100)}%): <Text style={styles.emphasis}>{Number.isFinite(balanceThreshold) ? vnd(balanceThreshold) : "Chưa tính được"}</Text></Text>
+      <Text style={styles.small}>Khoản chi dương đạt ngưỡng số dư được đánh dấu ngay, không cần lịch sử hoặc model. Các khoản còn lại cần ít nhất {data.policy.categoryMinCount} mẫu cùng danh mục, mốc so sánh hợp lệ và đủ dữ liệu cho model.</Text>
     </View>
   </View>;
 }

@@ -46,6 +46,7 @@ export function AnomalyPreviewResult({ preview, targetId }: { preview: AnalysisP
     <View style={styles.card}>
       <View style={styles.stats}>{stats.map(([label, value]) => <View key={label} style={styles.stat}><Text style={styles.help}>{label}</Text><Text style={styles.value}>{value}</Text></View>)}</View>
       <View style={styles.reasons}>{target.reasonCodes.map(code => <Text key={code} style={styles.reason}>• {getAnomalyReasonLabel(code)}</Text>)}</View>
+      {target.reasonCodes.includes("LARGE_SHARE_OF_BALANCE") ? <Text style={styles.help}>Đánh dấu trực tiếp theo số dư hiện tại, không chạy Isolation Forest và không yêu cầu đủ lịch sử.</Text> : null}
       {target.status === "normal" ? <Text style={styles.help}>Đã đủ dữ liệu tham chiếu; chưa phát hiện bất thường theo chính sách hiện tại.</Text> : null}
     </View>
     <View style={styles.note}><Info size={14} color={theme.textMuted} /><Text style={styles.noteText}>Chỉ dùng các giao dịch trước ngày {target.date.slice(0, 10).split("-").reverse().join("/")} làm mốc; không dùng khoản đang kiểm tra hoặc các khoản cùng ngày. Dữ liệu mẫu dùng để đối chiếu hành vi hệ thống, không phải kết quả đã được xác nhận đúng/sai.</Text></View>

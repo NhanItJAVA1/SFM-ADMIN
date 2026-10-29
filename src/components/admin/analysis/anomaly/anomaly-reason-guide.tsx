@@ -22,7 +22,7 @@ export function AnomalyReasonGuide({ activeCodes = [], policy }: { activeCodes?:
 
   return <View style={styles.panel}>
     <View style={styles.heading}><BookOpen size={18} color={theme.primary} /><Text accessibilityRole="header" style={styles.title}>Bảng giải thích Reason</Text><Text style={styles.count}>{anomalyReasonGuide.length} mã</Text></View>
-    <Text style={styles.help}>Hệ thống kiểm tra chất lượng lịch sử, độ lệch trong danh mục, rồi dùng Isolation Forest xác nhận ứng viên. Mã về thiếu mẫu/độ tin cậy không đồng nghĩa giao dịch bất thường. Các mã về độ lệch/tỷ trọng chỉ gửi cho khoản được đánh dấu bất thường. Các dòng tô xanh là mã trong kết quả thử hiện tại.</Text>
+    <Text style={styles.help}>Khoản chi đạt ngưỡng số dư được đánh dấu trực tiếp. Các khoản còn lại được kiểm tra lịch sử, độ lệch trong danh mục và Isolation Forest. Mã thiếu dữ liệu không đồng nghĩa giao dịch bất thường. Các dòng tô xanh là mã trong kết quả thử hiện tại.</Text>
     <table aria-label="Ý nghĩa và điều kiện của các mã giải thích giao dịch bất thường" style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontFamily: "AdminInter, system-ui, sans-serif", fontSize: 11, color: theme.text }}>
       <thead><tr>{["Mã Reason", "Ý nghĩa", "Điều kiện xuất hiện", "Ví dụ"].map((label, index) => <th key={label} scope="col" style={{ ...cell, width: ["25%", "25%", "25%", "25%"][index], textAlign: "left", fontWeight: 500, background: theme.cardAlt }}>{label}</th>)}</tr></thead>
       <tbody>{anomalyReasonGuide.map(reason => <tr key={reason.code} style={{ background: active.has(reason.code) ? theme.primaryPressed : undefined }}>
@@ -36,9 +36,9 @@ export function AnomalyReasonGuide({ activeCodes = [], policy }: { activeCodes?:
     </table>
     <View style={styles.notes}>
       <Text style={styles.help}>Trung vị là giá trị ở giữa khi sắp xếp số tiền; MAD là trung vị của các độ lệch tuyệt đối so với trung vị. Robust Z = 0,6745 × (số tiền − trung vị) / MAD.</Text>
-      <Text style={styles.help}>Thiếu mẫu, trung vị ≤ 0 hoặc MAD = 0 thì giữ trạng thái thiếu cơ sở đánh giá; không thay mốc danh mục bằng mức chi toàn user. Các mốc số mẫu là chính sách khởi đầu cần kiểm định bằng dữ liệu đã xác nhận.</Text>
+      <Text style={styles.help}>Ngoài nhánh số dư, thiếu mẫu, trung vị ≤ 0 hoặc MAD = 0 thì giữ trạng thái thiếu cơ sở đánh giá; không thay mốc danh mục bằng mức chi toàn user. Các mốc số mẫu là chính sách khởi đầu cần kiểm định bằng dữ liệu đã xác nhận.</Text>
       <Text style={styles.help}>Tập fit và trung vị/MAD chỉ dùng lịch sử trước ngày chấm. Contamination điều chỉnh model, không bắt buộc một tỷ lệ giao dịch phải trở thành cảnh báo mạnh.</Text>
-      <Text style={styles.help}>Thu nhập tháng là trung vị tổng thu nhập của các tháng có giao dịch thu trong lịch sử tham chiếu. Tỷ trọng thu nhập chỉ bổ sung ngữ cảnh tài chính; khi thiếu dữ liệu thu, mã tỷ trọng thu nhập lớn không được sinh ra.</Text>
+      <Text style={styles.help}>Số dư là tổng số dư tài khoản tại lúc phân tích, không phải số dư lịch sử của từng giao dịch. Không có tài khoản thì bỏ qua quy tắc số dư; số dư đã biết bằng 0 hoặc âm thì mọi khoản chi dương được đánh dấu trực tiếp.</Text>
     </View>
   </View>;
 }

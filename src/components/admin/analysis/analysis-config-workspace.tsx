@@ -40,6 +40,7 @@ const sampleFields = [
   { key: "expense", label: "Chi tiêu trong kỳ (VND)", value: "15000000" },
   { key: "budgetLimit", label: "Hạn mức ngân sách (VND)", value: "8000000" },
   { key: "budgetSpent", label: "Đã dùng ngân sách (VND)", value: "6800000" },
+  { key: "currentBalance", label: "Tổng số dư hiện tại (VND)", value: "10000000" },
   { key: "unusualExpense", label: "Khoản chi cần thử (VND)", value: "3000000" },
 ] as const;
 type SampleKey = (typeof sampleFields)[number]["key"];
@@ -156,6 +157,7 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
     expense: "15000000",
     budgetLimit: "8000000",
     budgetSpent: "6800000",
+    currentBalance: "10000000",
     unusualExpense: "3000000",
   });
   const [reason, setReason] = useState("");
@@ -348,13 +350,13 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
               {tab === "health" ? "Nhập tổng thu/chi và ngân sách để xem cách cấu hình đánh giá sức khỏe tài chính."
                 : "Quan sát lịch sử chi tiêu mô phỏng, sau đó nhập khoản tiếp theo để đối chiếu kết quả phát hiện bất thường."} Xem thử không lưu cấu hình.
             </Text>
-            {tab === "anomaly" ? <AnomalyPreviewDataset state={previewDataset} amount={sampleValues.unusualExpense} preview={preview} /> : null}
+            {tab === "anomaly" ? <AnomalyPreviewDataset state={previewDataset} amount={sampleValues.unusualExpense} balance={sampleValues.currentBalance} preview={preview} /> : null}
             <View style={styles.grid}>
               {sampleFields
                 .filter((field) =>
                   tab === "health"
-                    ? field.key !== "unusualExpense"
-                    : field.key === "unusualExpense" || field.key === "income",
+                    ? field.key !== "unusualExpense" && field.key !== "currentBalance"
+                    : field.key === "unusualExpense" || field.key === "currentBalance",
                 )
                 .map((field) => (
                   <View key={field.key} style={styles.field}>
