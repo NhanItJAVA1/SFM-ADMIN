@@ -1,0 +1,279 @@
+{
+  "user_id": 10062,
+  "period_days": 90,
+  "forecast_context_days": 90,
+  "as_of": "2026-10-28T23:59:59Z",
+  "transactions": [
+    {
+      "id": 1,
+      "amount": 71000,
+      "type": "Expense",
+      "date": "2026-09-28T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 2,
+      "amount": 72000,
+      "type": "Expense",
+      "date": "2026-09-29T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 3,
+      "amount": 73000,
+      "type": "Expense",
+      "date": "2026-09-30T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 4,
+      "amount": 74000,
+      "type": "Expense",
+      "date": "2026-10-01T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 5,
+      "amount": 75000,
+      "type": "Expense",
+      "date": "2026-10-02T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 6,
+      "amount": 76000,
+      "type": "Expense",
+      "date": "2026-10-03T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 7,
+      "amount": 77000,
+      "type": "Expense",
+      "date": "2026-10-04T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 8,
+      "amount": 78000,
+      "type": "Expense",
+      "date": "2026-10-05T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 9,
+      "amount": 79000,
+      "type": "Expense",
+      "date": "2026-10-06T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 10,
+      "amount": 80000,
+      "type": "Expense",
+      "date": "2026-10-07T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 11,
+      "amount": 81000,
+      "type": "Expense",
+      "date": "2026-10-08T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 12,
+      "amount": 82000,
+      "type": "Expense",
+      "date": "2026-10-09T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 13,
+      "amount": 83000,
+      "type": "Expense",
+      "date": "2026-10-10T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 14,
+      "amount": 84000,
+      "type": "Expense",
+      "date": "2026-10-11T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 15,
+      "amount": 85000,
+      "type": "Expense",
+      "date": "2026-10-12T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 16,
+      "amount": 86000,
+      "type": "Expense",
+      "date": "2026-10-13T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 17,
+      "amount": 87000,
+      "type": "Expense",
+      "date": "2026-10-14T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 18,
+      "amount": 88000,
+      "type": "Expense",
+      "date": "2026-10-15T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 19,
+      "amount": 89000,
+      "type": "Expense",
+      "date": "2026-10-16T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 20,
+      "amount": 90000,
+      "type": "Expense",
+      "date": "2026-10-17T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 21,
+      "amount": 91000,
+      "type": "Expense",
+      "date": "2026-10-18T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 22,
+      "amount": 92000,
+      "type": "Expense",
+      "date": "2026-10-19T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 23,
+      "amount": 93000,
+      "type": "Expense",
+      "date": "2026-10-20T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 24,
+      "amount": 94000,
+      "type": "Expense",
+      "date": "2026-10-21T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 25,
+      "amount": 95000,
+      "type": "Expense",
+      "date": "2026-10-22T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 26,
+      "amount": 96000,
+      "type": "Expense",
+      "date": "2026-10-23T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 27,
+      "amount": 97000,
+      "type": "Expense",
+      "date": "2026-10-24T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 28,
+      "amount": 98000,
+      "type": "Expense",
+      "date": "2026-10-25T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 29,
+      "amount": 99000,
+      "type": "Expense",
+      "date": "2026-10-26T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 30,
+      "amount": 100000,
+      "type": "Expense",
+      "date": "2026-10-27T12:00:00+00:00",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 31,
+      "amount": 3000000,
+      "type": "Expense",
+      "date": "2026-10-28T12:00:00Z",
+      "category_id": 1,
+      "category_name": "Ăn uống"
+    },
+    {
+      "id": 100,
+      "amount": 18000000,
+      "type": "Income",
+      "date": "2026-10-05T02:00:00Z",
+      "category_id": 2,
+      "category_name": "Lương"
+    }
+  ],
+  "budgets": [
+    {
+      "id": 1,
+      "category_id": 1,
+      "name": "Ngân sách ăn uống mô phỏng",
+      "limit": 6000000,
+      "spent": 5565000
+    }
+  ],
+  "accounts": [
+    {
+      "id": 1,
+      "balance": 12435000
+    }
+  ]
+}

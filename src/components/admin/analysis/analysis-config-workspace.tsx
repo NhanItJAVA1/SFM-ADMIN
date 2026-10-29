@@ -5,10 +5,15 @@ import {
   type AnalysisPreviewInput,
   type AnalysisSettings,
 } from "@/api/aiApi";
-import { getCurrentAnomalyReasonCodes } from "@/utils/anomalyReasons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { adminStyleSheet, useAdminTheme } from "./admin-design";
+import { adminStyleSheet, useAdminTheme } from "@/components/admin/admin-design";
+import { HealthThresholdControls } from "./health/health-threshold-controls";
+import { AnalysisConfigHistory } from "./analysis-config-history";
+import { VndAmountInput } from "./vnd-amount-input";
+import { AnomalyPreviewDataset, useAnomalyPreviewDataset } from "./anomaly/anomaly-preview-dataset";
+import { AnomalyReasonGuide } from "./anomaly/anomaly-reason-guide";
+import { AnomalyPreviewResult } from "./anomaly/anomaly-preview-result";
 
 type Form = {
   savingsRisk: string;
@@ -18,23 +23,7 @@ type Form = {
   contamination: string;
   minExpenseCount: string;
 };
-const fields: { key: keyof Form; label: string; help: string }[] = [
-  {
-    key: "savingsRisk",
-    label: "Tiết kiệm: ngưỡng rủi ro (%)",
-    help: "Dưới mức này → Risk. Chi vượt thu nhập luôn là Risk.",
-  },
-  {
-    key: "savingsWarning",
-    label: "Tiết kiệm: ngưỡng cảnh báo (%)",
-    help: "Dưới mức này → Warning, nếu chưa thuộc Risk.",
-  },
-  {
-    key: "budgetWarning",
-    label: "Ngân sách: ngưỡng cảnh báo (%)",
-    help: "Từ mức này trở lên → Warning, nếu chưa thuộc Risk.",
-  },
-  { key: "budgetRisk", label: "Ngân sách: ngưỡng rủi ro (%)", help: "Từ mức này trở lên → Risk." },
+const anomalyFields: { key: keyof Form; label: string; help: string }[] = [
   {
     key: "contamination",
     label: "Độ nhạy phát hiện (%)",
@@ -42,8 +31,8 @@ const fields: { key: keyof Form; label: string; help: string }[] = [
   },
   {
     key: "minExpenseCount",
-    label: "Số giao dịch chi tối thiểu",
-    help: "Số nguyên từ 20–500. Thiếu dữ liệu thì chưa kết luận bất thường.",
+    label: "Số giao dịch chi tham chiếu tối thiểu",
+    help: "Số nguyên từ 20–500, tính trên lịch sử trước ngày chấm; không tính khoản đang kiểm tra. Danh mục còn có yêu cầu số mẫu riêng.",
   },
 ];
 const sampleFields = [
@@ -55,17 +44,7 @@ const sampleFields = [
 ] as const;
 type SampleKey = (typeof sampleFields)[number]["key"];
 const statusName = (status: string) => ({ Healthy: "Ổn định", Warning: "Cảnh báo", Risk: "Rủi ro" })[status] || status;
-const reasons: Record<string, string> = {
-  HIGH_VS_USER_MEDIAN: "Cao so với mức chi thường ngày",
-  HIGH_VS_CATEGORY_MEDIAN: "Cao so với danh mục",
-  HIGH_USER_ROBUST_Z: "Lệch nhiều so với lịch sử",
-  HIGH_CATEGORY_ROBUST_Z: "Lệch nhiều trong danh mục",
-  LARGE_SHARE_OF_MONTHLY_INCOME: "Chiếm tỷ trọng thu nhập lớn",
-  UNUSUAL_FEATURE_COMBINATION: "Cần xem xét thêm",
-};
 const percent = (v: number) => `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(v * 100)}%`;
-const vnd = (v: number) =>
-  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(v);
 function toForm(settings: AnalysisSettings): Form {
   const h = settings.health;
   return {
@@ -127,7 +106,6 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
     text: { color: theme.text, fontSize: 12, lineHeight: 20 },
     help: { color: theme.textMuted, fontSize: 12, lineHeight: 20 },
     error: { color: theme.danger, fontSize: 12, lineHeight: 20 },
-    notice: { color: theme.primary, fontSize: 12, lineHeight: 20 },
     panel: {
       padding: 20,
       borderRadius: 10,
@@ -137,6 +115,9 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
       gap: 14,
     },
     row: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center" },
+    toolbar: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12 },
+    toolbarTabs: { flexShrink: 1, minWidth: 0 },
+    reloadActions: { flexDirection: "row", alignItems: "center", gap: 10, marginLeft: "auto" },
     grid: { flexDirection: "row", flexWrap: "wrap", gap: 18 },
     field: { flexGrow: 1, flexBasis: 260, gap: 7 },
     label: { color: theme.text, fontSize: 12, fontWeight: "500" },
@@ -169,6 +150,7 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
   const [history, setHistory] = useState<AnalysisConfigVersion[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [tab, setTab] = useState<"health" | "anomaly">("health");
+  const previewDataset = useAnomalyPreviewDataset(active && tab === "anomaly");
   const [samples, setSamples] = useState<Record<SampleKey, string>>({
     income: "18000000",
     expense: "15000000",
@@ -181,7 +163,6 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
   const [busy, setBusy] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState<AnalysisPreview | null>(null);
   const [confirmation, setConfirmation] = useState<"save" | AnalysisConfigVersion | null>(null);
   const [restoreReason, setRestoreReason] = useState("");
@@ -233,6 +214,7 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
     Object.values(sampleValues).every((value) => Number.isFinite(value) && value >= 0 && value <= 1e12) &&
     sampleValues.budgetLimit > 0;
   const disabled = busy || loading || confirmation !== null;
+  const datasetReady = tab !== "anomaly" || previewDataset.data !== null;
   function invalidatePreview() {
     previewRequest.current++;
     setPreview(null);
@@ -240,7 +222,7 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
   }
 
   async function runPreview() {
-    if (!settings || !samplesValid || disabled || previewing) return;
+    if (!settings || !samplesValid || !datasetReady || disabled || previewing) return;
     const id = ++previewRequest.current;
     setPreviewing(true);
     setError("");
@@ -260,7 +242,6 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
     locked.current = true;
     setBusy(true);
     setError("");
-    setNotice("");
     invalidatePreview();
     try {
       if (confirmation === "save") {
@@ -269,7 +250,6 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
       } else await aiApi.restoreAnalysisConfig(confirmation.version, { baseVersion: current.version, reason: note });
       if (!mounted.current) return;
       setConfirmation(null);
-      setNotice("Đã áp dụng cấu hình. Các lần phân tích tiếp theo sẽ sử dụng phiên bản mới.");
       await load();
     } catch (e) {
       if (mounted.current) {
@@ -281,91 +261,80 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
       if (mounted.current) setBusy(false);
     }
   }
-  const relevant = fields.filter((field) =>
-    tab === "health"
-      ? field.key !== "contamination" && field.key !== "minExpenseCount"
-      : field.key === "contamination" || field.key === "minExpenseCount",
-  );
-
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Cấu hình phân tích tài chính</Text>
       <Text style={styles.help}>
         Health đánh giá bằng ngưỡng nghiệp vụ. Anomaly phát hiện chi tiêu khác thường theo lịch sử từng người dùng.
       </Text>
-      <View style={styles.row}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={disabled || previewing}
-          onPress={() => {
-            invalidatePreview();
-            void load();
-          }}
-          style={[styles.button, (disabled || previewing) && styles.disabled]}
-        >
-          <Text style={styles.text}>Tải lại cấu hình</Text>
-        </Pressable>
-        {loading ? <ActivityIndicator color={theme.primary} /> : null}
+      <View style={styles.toolbar}>
+        <View style={[styles.row, styles.toolbarTabs]}>
+          {current && form ? (["health", "anomaly"] as const).map((value) => (
+            <Pressable
+              key={value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === value }}
+              onPress={() => setTab(value)}
+              style={[styles.button, tab === value && styles.selected]}
+            >
+              <Text style={styles.text}>
+                {value === "health" ? "Health · Sức khỏe tài chính" : "Anomaly · Chi tiêu bất thường"}
+              </Text>
+            </Pressable>
+          )) : null}
+        </View>
+        <View style={styles.reloadActions}>
+          {loading ? <ActivityIndicator color={theme.primary} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            disabled={disabled || previewing}
+            onPress={() => {
+              invalidatePreview();
+              void load();
+            }}
+            style={[styles.button, (disabled || previewing) && styles.disabled]}
+          >
+            <Text style={styles.text}>Tải lại cấu hình</Text>
+          </Pressable>
+        </View>
       </View>
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>
           {error}
         </Text>
       ) : null}
-      {notice ? (
-        <Text accessibilityRole="alert" style={styles.notice}>
-          {notice}
-        </Text>
-      ) : null}
       {current && form ? (
         <>
-          <View style={styles.panel}>
-            <Text style={styles.title}>Đang sử dụng</Text>
-            <Text selectable style={styles.text}>
-              {current.version}
-            </Text>
-            <Text style={styles.help}>
-              Health: quy tắc ngưỡng · Anomaly: Isolation Forest · Không cần train model qua Admin.
-            </Text>
-          </View>
-          <View style={styles.row}>
-            {(["health", "anomaly"] as const).map((value) => (
-              <Pressable
-                key={value}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: tab === value }}
-                onPress={() => setTab(value)}
-                style={[styles.button, tab === value && styles.selected]}
-              >
-                <Text style={styles.text}>
-                  {value === "health" ? "Health · Sức khỏe tài chính" : "Anomaly · Chi tiêu bất thường"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
           <View style={styles.panel}>
             <Text style={styles.title}>
               {tab === "health" ? "Ngưỡng đánh giá sức khỏe" : "Độ nhạy cảnh báo bất thường"}
             </Text>
-            <View style={styles.grid}>
-              {relevant.map((field) => (
-                <View key={field.key} style={styles.field}>
-                  <Text style={styles.label}>{field.label}</Text>
-                  <TextInput
-                    accessibilityLabel={field.label}
-                    inputMode="decimal"
-                    editable={!disabled}
-                    value={form[field.key]}
-                    onChangeText={(value) => {
-                      setForm({ ...form, [field.key]: value });
-                      invalidatePreview();
-                    }}
-                    style={styles.input}
-                  />
-                  <Text style={styles.help}>{field.help}</Text>
-                </View>
-              ))}
-            </View>
+            {tab === "health" ? (
+              <HealthThresholdControls value={form} disabled={disabled} onChange={patch => {
+                setForm(current => current ? { ...current, ...patch } : current);
+                invalidatePreview();
+              }} />
+            ) : (
+              <View style={styles.grid}>
+                {anomalyFields.map((field) => (
+                  <View key={field.key} style={styles.field}>
+                    <Text style={styles.label}>{field.label}</Text>
+                    <TextInput
+                      accessibilityLabel={field.label}
+                      inputMode="decimal"
+                      editable={!disabled}
+                      value={form[field.key]}
+                      onChangeText={(value) => {
+                        setForm({ ...form, [field.key]: value });
+                        invalidatePreview();
+                      }}
+                      style={styles.input}
+                    />
+                    <Text style={styles.help}>{field.help}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
             {!settings ? (
               <Text accessibilityRole="alert" style={styles.error}>
                 Kiểm tra cấu hình ở cả hai tab: tiết kiệm 0–100% với Risk &lt; Warning; ngân sách 0–500% với Warning
@@ -376,9 +345,10 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
           <View style={styles.panel}>
             <Text style={styles.title}>Xem thử trước khi áp dụng</Text>
             <Text style={styles.help}>
-              Health dùng tổng thu/chi và ngân sách bên dưới. Anomaly dùng 60 giao dịch chi mô phỏng ăn uống, đi lại,
-              mua sắm trong 60 ngày; khoản chi cuối do bạn điều chỉnh. Xem thử không lưu cấu hình.
+              {tab === "health" ? "Nhập tổng thu/chi và ngân sách để xem cách cấu hình đánh giá sức khỏe tài chính."
+                : "Quan sát lịch sử chi tiêu mô phỏng, sau đó nhập khoản tiếp theo để đối chiếu kết quả phát hiện bất thường."} Xem thử không lưu cấu hình.
             </Text>
+            {tab === "anomaly" ? <AnomalyPreviewDataset state={previewDataset} amount={sampleValues.unusualExpense} preview={preview} /> : null}
             <View style={styles.grid}>
               {sampleFields
                 .filter((field) =>
@@ -389,16 +359,14 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
                 .map((field) => (
                   <View key={field.key} style={styles.field}>
                     <Text style={styles.label}>{field.label}</Text>
-                    <TextInput
-                      accessibilityLabel={field.label}
-                      editable={!disabled}
-                      inputMode="numeric"
+                    <VndAmountInput
+                      label={field.label}
+                      disabled={disabled || !datasetReady}
                       value={samples[field.key]}
-                      onChangeText={(value) => {
-                        setSamples({ ...samples, [field.key]: value });
+                      onChange={(digits) => {
+                        setSamples(current => ({ ...current, [field.key]: digits }));
                         invalidatePreview();
                       }}
-                      style={styles.input}
                     />
                   </View>
                 ))}
@@ -408,9 +376,9 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
             ) : null}
             <Pressable
               accessibilityRole="button"
-              disabled={disabled || !settings || !samplesValid || previewing}
+              disabled={disabled || !settings || !samplesValid || !datasetReady || previewing}
               onPress={() => void runPreview()}
-              style={[styles.button, (disabled || !settings || !samplesValid || previewing) && styles.disabled]}
+              style={[styles.button, (disabled || !settings || !samplesValid || !datasetReady || previewing) && styles.disabled]}
             >
               <Text style={styles.text}>{previewing ? "Đang phân tích mẫu…" : "Xem thử kết quả"}</Text>
             </Pressable>
@@ -429,32 +397,13 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
                   ))}
                 </View>
               ) : (
-                <View style={styles.line}>
-                  <Text style={styles.title}>
-                    {preview.anomaly.summary.status === "insufficient_data"
-                      ? "Chưa đủ dữ liệu mẫu"
-                      : `${preview.anomaly.summary.anomalyCount} / ${preview.sampleExpenseCount} khoản chi được đánh dấu`}
-                  </Text>
-                  <Text style={styles.help}>
-                    Cần ít nhất {preview.anomaly.summary.minRequiredExpenseCount} khoản chi. Đây là kết quả trên dữ liệu
-                    mô phỏng, cần xem xét ngữ cảnh trước khi kết luận.
-                  </Text>
-                  {preview.anomaly.transactions.map((row) => (
-                    <View key={row.transactionId} style={styles.line}>
-                      <Text style={styles.text}>
-                        {row.date.slice(0, 10)} · {row.category} · {vnd(row.amount)}
-                      </Text>
-                      <Text style={styles.help}>
-                        {getCurrentAnomalyReasonCodes(row.reasonCodes)
-                          .map((code) => reasons[code] || code)
-                          .join(" · ") || "Được AI đánh dấu bất thường"}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                <AnomalyPreviewResult preview={preview} targetId={previewDataset.data?.target.transactionId} />
               )
             ) : null}
           </View>
+          {tab === "anomaly" ? <AnomalyReasonGuide
+            activeCodes={preview?.anomaly.summary.assessments.flatMap(row => row.reasonCodes) ?? []}
+            policy={previewDataset.data?.policy} /> : null}
           <View style={styles.panel}>
             <Text style={styles.title}>Lưu và áp dụng cho các lần phân tích tiếp theo</Text>
             <TextInput
@@ -476,52 +425,11 @@ export function AnalysisConfigWorkspace({ active = true }: { active?: boolean } 
               <Text style={styles.primaryText}>Lưu và áp dụng cấu hình</Text>
             </Pressable>
           </View>
-          <View style={styles.panel}>
-            <Text style={styles.title}>Lịch sử cấu hình · {history.length} phiên bản</Text>
-            <Text style={styles.help}>
-              Khôi phục tạo một phiên bản mới và giữ nguyên lịch sử. Người thực hiện được BE xác định từ tài khoản đăng
-              nhập.
-            </Text>
-            {history.map((row) => (
-              <View key={row.version} style={styles.line}>
-                <Text selectable style={styles.text}>
-                  {row.version}
-                  {row.version === current.version ? " · Đang dùng" : ""}
-                </Text>
-                <Text style={styles.help}>
-                  {row.createdAt
-                    ? new Date(row.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
-                    : "Mặc định"}{" "}
-                  · {row.actor === "system" ? "Hệ thống" : `Admin #${row.actor}`}
-                </Text>
-                <Text style={styles.text}>{row.reason}</Text>
-                <Text style={styles.help}>
-                  Tiết kiệm: Risk &lt; {percent(row.settings.health.savingsRisk)}, Warning &lt;{" "}
-                  {percent(row.settings.health.savingsWarning)} · Ngân sách: Warning ≥{" "}
-                  {percent(row.settings.health.budgetWarning)}, Risk ≥ {percent(row.settings.health.budgetRisk)}
-                </Text>
-                <Text style={styles.help}>
-                  Anomaly: {percent(row.settings.anomaly.contamination)} · Tối thiểu{" "}
-                  {row.settings.anomaly.minExpenseCount} khoản chi
-                  {row.restoredFrom ? ` · Khôi phục từ ${row.restoredFrom}` : ""}
-                </Text>
-                {row.version !== current.version ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Khôi phục ${row.version}`}
-                    disabled={disabled}
-                    onPress={() => {
-                      setRestoreReason("");
-                      setConfirmation(row);
-                    }}
-                    style={styles.button}
-                  >
-                    <Text style={styles.text}>Khôi phục cấu hình này</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ))}
-          </View>
+          <AnalysisConfigHistory history={history} activeVersion={current.version} disabled={disabled}
+            onRestore={row => {
+              setRestoreReason("");
+              setConfirmation(row);
+            }} />
         </>
       ) : null}
       <Modal
