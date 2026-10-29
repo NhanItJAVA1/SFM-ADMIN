@@ -34,7 +34,7 @@ export type AITopCategory = {
 
 export type AnomalyPolicy = {
   categoryMinCount: number; referenceLookbackDays: number;
-  categoryRatioLimit: number; categoryZLimit: number; incomeShareLimit: number;
+  categoryRatioLimit: number; categoryZLimit: number; balanceShareLimit: number;
 };
 export type AnomalyAssessment = {
   transactionId: number | null; date: string; categoryId: number | null; category: string;
@@ -44,7 +44,7 @@ export type AnomalyAssessment = {
   categorySampleCount: number; categoryMedian: number | null;
 };
 // Kiểu dẫn xuất cho UI sau khi lọc assessments; API không gửi danh sách thứ hai.
-export type AIAnomaly = AnomalyAssessment & { status: 'anomaly'; anomalyScore: number };
+export type AIAnomaly = AnomalyAssessment & { status: 'anomaly' };
 
 export type AIAnomalySummary = {
   status: 'ok' | 'partial' | 'insufficient_data';
@@ -213,7 +213,7 @@ export type AnalysisConfigVersion = {
 };
 export type AnalysisPreviewInput = {
   settings: AnalysisSettings; income: number; expense: number; budgetLimit: number;
-  budgetSpent: number; unusualExpense: number;
+  budgetSpent: number; unusualExpense: number; currentBalance: number;
 };
 export type AnalysisPreviewTransaction = {
   transactionId: number; date: string; category: string; amount: number;

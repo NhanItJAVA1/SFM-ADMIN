@@ -5,7 +5,7 @@ export function getAnomalyReasonGuide(policy?: AnomalyPolicy) {
   const minimum = policy?.categoryMinCount ?? 20;
   const ratio = policy?.categoryRatioLimit ?? 3;
   const z = policy?.categoryZLimit ?? 3.5;
-  const income = (policy?.incomeShareLimit ?? 0.2) * 100;
+  const balance = (policy?.balanceShareLimit ?? 0.3) * 100;
   const number = (value: number) => new Intl.NumberFormat('vi-VN').format(value);
   return [
     {
@@ -21,16 +21,16 @@ export function getAnomalyReasonGuide(policy?: AnomalyPolicy) {
       example: 'Khoản mua sắm khác biệt rõ với các khoản mua sắm trước đó.'
     },
     {
-      code: 'LARGE_SHARE_OF_MONTHLY_INCOME', label: 'Chiếm tỷ trọng thu nhập lớn',
-      meaning: 'Thông tin ảnh hưởng tài chính bổ sung; không tự quyết định nhãn bất thường.',
-      condition: `Khoản được đánh dấu bất thường và chiếm ≥ ${number(income)}% thu nhập tháng ước tính.`,
-      example: `Thu nhập 18.000.000đ → từ ${number(18000000 * income / 100)}đ đáp ứng điều kiện.`
+      code: 'LARGE_SHARE_OF_BALANCE', label: 'Chi lớn so với số dư hiện tại',
+      meaning: 'Đánh dấu bất thường trực tiếp theo tỷ trọng số dư, không cần đủ lịch sử hoặc chạy model.',
+      condition: `Khoản chi > 0 và đạt ít nhất ${number(balance)}% tổng số dư hiện tại đã biết.`,
+      example: `Số dư 10.000.000đ → từ ${number(10000000 * balance / 100)}đ được đánh dấu ngay.`
     },
     {
       code: 'LIMITED_HISTORY', label: 'Chưa đủ dữ liệu',
       meaning: 'Chưa có đủ lịch sử tham chiếu tin cậy để đánh giá khoản chi.',
-      condition: `Dưới ${minimum} mẫu cùng danh mục, mốc so sánh không hợp lệ hoặc chưa đủ mẫu hợp lệ cho model.`,
-      example: 'Danh mục có 7 khoản: chưa đánh giá cả khoản nhỏ lẫn khoản lớn, chờ thêm lịch sử.'
+      condition: `Không thuộc nhánh số dư và dưới ${minimum} mẫu cùng danh mục, mốc so sánh không hợp lệ hoặc chưa đủ mẫu hợp lệ cho model.`,
+      example: 'Danh mục có 7 khoản, khoản chi dưới ngưỡng số dư: chờ thêm lịch sử.'
     },
   ];
 }
