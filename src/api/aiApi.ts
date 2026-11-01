@@ -107,6 +107,32 @@ export type AIForecastTrainPayload = {
   userIds?: number[];
 };
 
+export type ForecastTrainingAccount = {
+  id: number; userId: number; initialBalance: number;
+  createdAt: string; deletedAt: string | null; openingBalance?: number;
+};
+export type ForecastTrainingTransaction = {
+  id: number; accountId: number; categoryId: number | null; type: string; amount: number;
+  transactionDate: string; isExcluded: boolean; createdAt: string; deletedAt: string | null;
+};
+export type ForecastTrainingBudget = {
+  id: number; userId: number; categoryId: number | null; amount: number;
+  startDate: string; endDate: string; createdAt: string; deletedAt: string | null; spentBeforeHistory?: number;
+};
+export type ForecastTrainingCategory = { id: number; userId: number | null; type: string };
+export type ForecastTrainingSnapshot = {
+  userId: number; asOf: string; historyStartDate?: string;
+  accounts: ForecastTrainingAccount[]; transactions: ForecastTrainingTransaction[];
+  budgets: ForecastTrainingBudget[]; categories: ForecastTrainingCategory[];
+};
+export type ForecastTrainingPayload = {
+  users: ForecastTrainingSnapshot[]; parameters: Record<string, number>;
+  originStrideDays: number; historyMonths: number | null;
+};
+export type ForecastTrainingPreparation = {
+  preparationId: string; expiresAt: string; payload: ForecastTrainingPayload;
+};
+
 export type ForecastTrainingMetrics = {
   dailyMAE: number;
   dailyRMSE: number;
@@ -240,7 +266,9 @@ export const aiApi = {
   analysisPreviewDataset: (signal?: AbortSignal) => axiosClient.get<AnalysisPreviewDataset>('/v1/admin/analysis-config/preview-data', { signal }),
   analysis: () => axiosClient.post<AIAnalysis>('/v1/FinancialAdvisor/analyze'),
   chat: (payload: AIChatPayload) => axiosClient.post<AIChatResponse>('/v1/AI/chat', payload),
-  trainForecast: (payload: AIForecastTrainPayload) =>
+  prepareForecastTraining: (payload: AIForecastTrainPayload) =>
+    axiosClient.post<ForecastTrainingPreparation>('/v1/admin/forecast/train/prepare', payload),
+  trainForecast: (payload: AIForecastTrainPayload | { preparationId: string }) =>
     axiosClient.post<ForecastTrainingResponse>('/v1/admin/forecast/train', payload),
   forecastVersions: (limit = 10, offset = 0) =>
     axiosClient.get<ForecastVersionPage>(`/v1/admin/forecast/versions?limit=${limit}&offset=${offset}`),

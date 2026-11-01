@@ -27,6 +27,8 @@ The web app is intended to be served over HTTPS in production. API authorization
 
 The hidden tabs navigator mounts each page on its first visit and retains its state when switching pages. This keeps an ongoing training request and its result alive until the admin layout is unmounted, for example on logout or a full browser reload. Monitoring and load-testing polling follow the active route.
 
+Training first calls `POST /v1/admin/forecast/train/prepare`. BE builds the financial snapshot once and returns the full AI payload plus a `preparationId`. The admin page writes accounts, transactions, budgets and categories for each user directly into the console-style training log, with filtering and a full JSON download. It then calls `POST /v1/admin/forecast/train` with that ID. BE uses the same stored snapshot, rather than fetching data again or trusting financial records submitted by the browser. Preparations are bound to the admin, expire in Redis after 10 minutes, and are consumed once. The existing train endpoint still accepts the original request without a preparation ID. Deploy/restart the updated BE together with this UI; AI needs no contract change. The displayed payload stays in page memory and is cleared for the next run or on reload/logout.
+
 The users, categories and RAG pages each fetch only their own list. `src/hooks/use-admin-resource.ts` reloads on focus, aborts list requests on blur or when replaced, and ignores stale responses. RAG mutations refresh only RAG data. The overview intentionally fetches users, categories and documents for its summary cards; the backend does not currently expose a dedicated overview-summary endpoint.
 
 Overview, users and categories live in `src/components/admin/pages/`. Forecast, RAG and analysis code have dedicated folders:
@@ -46,6 +48,7 @@ src/components/admin/
       anomaly-reasons.ts
   forecast/
     forecast-training-workspace.tsx
+    forecast-training-log.tsx
     forecast-training-result.tsx
     forecast-model-versions.tsx
     training-users.ts

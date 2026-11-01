@@ -3,12 +3,14 @@ import { CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, CircleDash
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
-import { aiApi, type ForecastTrainingResponse } from '@/api/aiApi';
+import { aiApi, type ForecastTrainingPayload, type ForecastTrainingResponse } from '@/api/aiApi';
 import type { AdminUser } from '@/api/adminApi';
 import { BottomPopup, BottomPopupSheet } from '@/components/bottom-popup';
 import { FocusedScreenTransition } from '@/components/screen-transition';
 import { adminStyleSheet, useAdminTheme, type AdminTheme } from '../admin-design';
 import { ForecastModelVersions } from './forecast-model-versions';
+import { ForecastTrainingLog, type TrainingLogEntry } from './forecast-training-log';
+import { trainingPayloadLogs } from './training-log-data';
 import { canTrainUser, getTrainingErrorMessage, getTrainingUserIssue, isTrainingDateValid, loadTrainingUsers } from './training-users';
 
 const pageSize = 10;
@@ -37,6 +39,9 @@ export function ForecastTrainingWorkspace({ renderResult, active = true }: {
   const [useAllHistory, setUseAllHistory] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [result, setResult] = useState<ForecastTrainingResponse | null>(null);
+  const [trainingLogs, setTrainingLogs] = useState<TrainingLogEntry[]>([]);
+  const [trainingData, setTrainingData] = useState<ForecastTrainingPayload | null>(null);
+  const [trainingSession, setTrainingSession] = useState(0);
   const [workspaceTab, setWorkspaceTab] = useState<'versions' | 'training'>('versions');
   const requestRef = useRef(0);
   const runningRef = useRef(false);
@@ -131,6 +136,19 @@ export function ForecastTrainingWorkspace({ renderResult, active = true }: {
     runningRef.current = true;
     setIsTraining(true);
     setTrainingError('');
+    setResult(null);
+    setTrainingData(null);
+    setTrainingSession(current => current + 1);
+    let logId = 0;
+    let stage: TrainingLogEntry['stage'] = 'data';
+    function log(entry: Omit<TrainingLogEntry, 'id' | 'timestamp'>) {
+      if (!mountedRef.current) return;
+      const nextEntry = { ...entry, id: ++logId, timestamp: Date.now() };
+      setTrainingLogs(current => [...current, nextEntry]);
+    }
+    setTrainingLogs([]);
+    log({ stage, status: 'running', message: 'Đang lấy dữ liệu người dùng và kiểm tra điều kiện huấn luyện…',
+      detail: `Phạm vi: ${scope === 'all' ? 'Tất cả người dùng' : `${selectedIds.length} người dùng đã chọn`} · Ngày chốt: ${asOf.split('-').reverse().join('/')} · Lịch sử: ${useAllHistory ? 'Toàn bộ' : `${historyMonths} tháng`}.` });
     try {
       // Recheck roles before sending IDs, including selections made on earlier pages.
       const freshUsers = await loadTrainingUsers();
@@ -140,16 +158,61 @@ export function ForecastTrainingWorkspace({ renderResult, active = true }: {
       setUsers(freshUsers);
       setSelectedIds(current => current.filter(id => eligibleIds.has(id)));
       const userIds = scope === 'all' ? [...eligibleIds] : selectedIds.filter(id => eligibleIds.has(id));
+      log({ stage, status: 'info', message: `Đã lấy ${freshUsers.length} người dùng: ${freshEligible.length} đủ điều kiện, ${freshUsers.length - freshEligible.length} không đủ điều kiện.`,
+        detail: `${userIds.length} người dùng thuộc phạm vi huấn luyện hiện tại.` });
       if (scope === 'selected' && userIds.length !== selectedIds.length) {
         throw new Error('Một số người dùng không còn đủ điều kiện theo ngày chốt. Danh sách đã được cập nhật; vui lòng kiểm tra lý do và chọn lại trước khi huấn luyện.');
       }
       if (userIds.length < 2) throw new Error('Cần ít nhất 2 người dùng đang hoạt động và có tài khoản tài chính trước hoặc trong ngày chốt.');
       // Gửi rõ kỳ lịch sử cho cả hai phạm vi user; null là toàn bộ lịch sử theo contract BE.
       const payload = { asOf, historyMonths: useAllHistory ? null : Number(historyMonths) };
-      const response = await aiApi.trainForecast(scope === 'all' ? payload : { ...payload, userIds });
-      if (mountedRef.current) setResult(response.data);
+      log({ stage, status: 'info', message: 'BE đang lấy tài khoản, giao dịch, ngân sách và danh mục để gửi sang AI…' });
+      const { data: prepared } = await aiApi.prepareForecastTraining(scope === 'all' ? payload : { ...payload, userIds });
+      if (!mountedRef.current) return;
+      setTrainingData(prepared.payload);
+      const userNames = new Map(freshUsers.map(user => [user.id, user.displayName || user.username]));
+      const totals = prepared.payload.users.reduce((counts, user) => ({
+        accounts: counts.accounts + user.accounts.length,
+        transactions: counts.transactions + user.transactions.length,
+        budgets: counts.budgets + user.budgets.length,
+        categories: counts.categories + user.categories.length,
+      }), { accounts: 0, transactions: 0, budgets: 0, categories: 0 });
+      let payloadLogCount = 0;
+      for (const entry of trainingPayloadLogs(prepared.payload, userNames)) {
+        log(entry);
+        payloadLogCount += 1;
+        if (payloadLogCount % 30 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 8));
+          if (!mountedRef.current) return;
+        }
+      }
+      log({ stage, status: 'success', message: `Đã lấy đầy đủ dữ liệu của ${prepared.payload.users.length} người dùng.`,
+        detail: `${totals.accounts} tài khoản · ${totals.transactions} giao dịch · ${totals.budgets} ngân sách · ${totals.categories} tham chiếu danh mục. Xem toàn bộ dữ liệu gửi sang AI trong bảng bên dưới.` });
+      stage = 'training';
+      log({ stage, status: 'running', message: 'Đang huấn luyện mô hình AI…', detail: 'BE gửi đúng bộ dữ liệu đã hiển thị bên dưới sang AI để tạo tập huấn luyện và đánh giá.' });
+      const response = await aiApi.trainForecast({ preparationId: prepared.preparationId });
+      if (!mountedRef.current) return;
+      const nextResult = response.data;
+      setResult(nextResult);
+      const { dataset, split } = nextResult;
+      const number = (value: number) => new Intl.NumberFormat('vi-VN').format(value);
+      log({ stage, status: 'info', message: 'Đã nhận số liệu tập dữ liệu huấn luyện.',
+        detail: `Đầu vào: ${number(dataset.inputUserCount)} người dùng · Sử dụng: ${number(dataset.usableUserCount)} · Bỏ qua: ${number(dataset.skippedUserCount)}.\n${number(dataset.rowCount)} bản ghi · ${number(dataset.forecastWindowCount)} cửa sổ dự báo · Đơn vị: ${dataset.currency}.\nTrain: ${number(split.train.rowCount)} · Validation: ${number(split.validation.rowCount)} · Test: ${number(split.test.rowCount)} bản ghi.` });
+      if (nextResult.status !== 'succeeded') {
+        throw new Error(`Huấn luyện chưa thành công. Trạng thái trả về: ${nextResult.status}.`);
+      }
+      log({ stage, status: 'success', message: 'Huấn luyện mô hình thành công.' });
+      stage = 'complete';
+      log({ stage, status: 'success', message: 'Đã hoàn tất huấn luyện và nhận kết quả đánh giá.',
+        detail: `Phiên bản: ${nextResult.candidateModelVersion ?? nextResult.modelVersion ?? nextResult.runId ?? '—'} · ${nextResult.saved ? 'Được chọn sử dụng' : nextResult.archived ? 'Đã lưu trong kho, chưa chọn sử dụng' : 'Chưa chọn sử dụng'}.` });
+      if (!nextResult.evaluation.saveCheck.passed) log({ stage, status: 'warning', message: 'Mô hình chưa đạt điều kiện lưu.', detail: nextResult.evaluation.saveCheck.reason });
+      if (nextResult.catalogWarning) log({ stage, status: 'warning', message: nextResult.catalogWarning });
     } catch (error) {
-      if (mountedRef.current) setTrainingError(getTrainingErrorMessage(error, asOf));
+      if (mountedRef.current) {
+        const message = getTrainingErrorMessage(error, asOf);
+        setTrainingError(message);
+        log({ stage, status: 'error', message });
+      }
     } finally {
       runningRef.current = false;
       if (mountedRef.current) setIsTraining(false);
@@ -234,6 +297,8 @@ export function ForecastTrainingWorkspace({ renderResult, active = true }: {
           </View>
         </View>
       </View>
+
+      <ForecastTrainingLog key={trainingSession} entries={trainingLogs} running={isTraining} payload={trainingData} users={users} />
 
       <View style={styles.resultsHeading}><Text style={styles.panelTitle}>Kết quả huấn luyện</Text><Text style={styles.helpText}>{result ? 'Kết quả của lần chạy gần nhất trong phiên này.' : 'Các chỉ số đánh giá sẽ được hiển thị sau khi chạy.'}</Text></View>
       {result ? renderResult(result) : <View style={styles.resultsEmpty}><View style={styles.resultsIcon}><CircleCheck size={24} strokeWidth={1.4} color={theme.textMuted} /></View><View style={styles.headingCopy}><Text style={styles.panelTitle}>{isTraining ? 'Đang chuẩn bị kết quả' : 'Chưa có kết quả huấn luyện'}</Text><Text style={styles.description}>Thiết lập dữ liệu, bắt đầu huấn luyện và so sánh chất lượng mô hình tại đây.</Text></View></View>}

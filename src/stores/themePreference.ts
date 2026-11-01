@@ -7,7 +7,7 @@ export type AppThemeMode = "dark" | "light";
 
 const themeStorageKey = "sfm.theme.mode";
 const subscribers = new Set<() => void>();
-let currentThemeMode: AppThemeMode = "dark";
+let currentThemeMode: AppThemeMode = "light";
 
 export function getThemeMode() {
   return currentThemeMode;
