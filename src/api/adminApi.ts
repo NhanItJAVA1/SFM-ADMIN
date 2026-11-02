@@ -3,19 +3,15 @@ import type { Category, CategoryType } from './categoriesApi';
 
 export type AdminUserStatus = 'Active' | 'Inactive' | 'Suspended';
 
-export type MonitoringRange = '15m' | '1h' | '6h' | '24h';
+export type MonitoringRange = '1h' | '6h' | '24h' | '7d';
 export type MonitoringPoint = { timestampUtc: string; value: number | null };
-export type MonitoringSeriesKey = 'requestsPerSecond' | 'p95LatencyMilliseconds' | 'http5xxErrorRatePercent';
-export type AdminMonitoringTimeseries = {
-  range: MonitoringRange;
-  stepSeconds: number;
-  series: Record<MonitoringSeriesKey, MonitoringPoint[]>;
-};
+export type AdminMonitoringRequests = { range: string; totalRequests: number | null; requestsPerMinute: MonitoringPoint[] };
+export type AdminMonitoringEndpoint = { route: string; method: string | null; totalRequests: number | null };
+export type AdminMonitoringEndpoints = { range: string; routeLabelsAvailable: boolean; endpoints: AdminMonitoringEndpoint[] };
 
 export type AdminMonitoringOverview = {
-  observedAtUtc?: string | null;
-  observationWindow?: string | null;
-  requestsPerSecond?: number | null;
+  observedAtUtc: string;
+  requestsPerMinute: number | null;
   p95LatencyMilliseconds?: number | null;
   http5xxErrorRatePercent?: number | null;
   apiAvailabilityPercent?: number | null;
@@ -154,10 +150,12 @@ export const adminApi = {
     axiosClient.get<LoadTestMetrics>(`/v1/admin/load-tests/metrics?${new URLSearchParams({ testId, rateWindowSeconds: String(rateWindowSeconds) })}`, { signal, timeout: 15000 }),
   loadTestHistory: (testId: string, rangeMinutes: number, rateWindowSeconds: number, signal?: AbortSignal) =>
     axiosClient.get<LoadTestMetricsHistory>(`/v1/admin/load-tests/metrics/history?${new URLSearchParams({ testId, rangeMinutes: String(rangeMinutes), rateWindowSeconds: String(rateWindowSeconds) })}`, { signal, timeout: 20000 }),
-  monitoringTimeseries: (range: MonitoringRange, signal?: AbortSignal) =>
-    axiosClient.get<AdminMonitoringTimeseries>(`/v1/admin/monitoring/timeseries?${new URLSearchParams({ range, step: '15s' })}`, { signal, timeout: 20000 }),
   monitoringOverview: (signal?: AbortSignal) =>
-    axiosClient.get<AdminMonitoringOverview | null>('/v1/admin/monitoring/overview', { signal, timeout: 20000 }),
+    axiosClient.get<AdminMonitoringOverview>('/v1/admin/monitoring/overview', { signal, timeout: 20000 }),
+  monitoringRequests: (range: Exclude<MonitoringRange, '7d'>, signal?: AbortSignal) =>
+    axiosClient.get<AdminMonitoringRequests>(`/v1/admin/monitoring/requests?${new URLSearchParams({ range })}`, { signal, timeout: 20000 }),
+  monitoringEndpoints: (range: Exclude<MonitoringRange, '7d'>, signal?: AbortSignal) =>
+    axiosClient.get<AdminMonitoringEndpoints>(`/v1/admin/monitoring/endpoints?${new URLSearchParams({ range })}`, { signal, timeout: 20000 }),
   listUsers: (params: AdminUserQuery = {}, signal?: AbortSignal) =>
     axiosClient.get<AdminUserPagedResponse | AdminUser[]>(`/v1/admin/users${buildQuery(params)}`, { signal }),
   getUser: (id: number) => axiosClient.get<AdminUser>(`/v1/admin/users/${id}`),

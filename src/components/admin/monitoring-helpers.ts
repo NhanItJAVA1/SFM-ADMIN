@@ -15,11 +15,13 @@ export function metricNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-export function formatMonitoringMetric(value: unknown, unit: 'req/s' | 'ms' | '%') {
+export function formatMonitoringMetric(value: unknown, unit: 'req/s' | 'req/min' | 'requests' | 'ms' | '%') {
   const number = metricNumber(value);
   if (number === null) return 'N/A';
   const formatted = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number);
-  return unit === '%' ? `${formatted}%` : `${formatted} ${unit}`;
+  if (unit === '%') return `${formatted}%`;
+  if (unit === 'requests') return formatted;
+  return `${formatted} ${unit}`;
 }
 
 export function formatMonitoringWindow(value: unknown) {
@@ -42,7 +44,7 @@ export function formatMonitoringTime(value: unknown) {
 
 export function hasMonitoringData(data: AdminMonitoringOverview | null) {
   return data !== null && (
-    [data.requestsPerSecond, data.p95LatencyMilliseconds, data.http5xxErrorRatePercent, data.apiAvailabilityPercent]
+    [data.requestsPerMinute, data.p95LatencyMilliseconds, data.http5xxErrorRatePercent, data.apiAvailabilityPercent]
       .some(value => metricNumber(value) !== null) ||
     [data.apiHealth, data.sqlServerHealth, data.redisHealth].some(value => monitoringHealth(value) !== 'Unknown')
   );
