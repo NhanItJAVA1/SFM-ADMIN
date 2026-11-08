@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
 
 import { useAdminTheme } from "@/components/admin/admin-design";
 
-type Props = { value: string; onChange: (digits: string) => void; label: string; disabled?: boolean };
+type Props = { value: string; onChange: (digits: string) => void; label: string; disabled?: boolean; allowNegative?: boolean };
 type DigitSelection = { start: number; end: number };
 
 function formatAmount(digits: string) {
@@ -44,7 +44,7 @@ function readEdit(text: string, start: number, end: number, inputType: string, p
 }
 
 /** Display grouped VND amounts while keeping the form/API value as raw digits. */
-export function VndAmountInput({ value, onChange, label, disabled = false }: Props) {
+export function VndAmountInput({ value, onChange, label, disabled = false, allowNegative = false }: Props) {
   const theme = useAdminTheme();
   const inputRef = useRef<HTMLInputElement>(null);
   const [selection, setSelection] = useState<DigitSelection | null>(null);
@@ -61,12 +61,13 @@ export function VndAmountInput({ value, onChange, label, disabled = false }: Pro
     if (disabled) return;
     const input = event.currentTarget;
     const nativeEvent = event.nativeEvent as InputEvent;
-    const edit = readEdit(input.value, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, nativeEvent.inputType ?? "", value);
+    const negative = allowNegative && input.value.startsWith('-');
+    const edit = readEdit(input.value, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, nativeEvent.inputType ?? "", value.replace(/\D/g, ''));
     setSelection(edit.selection);
-    onChange(edit.digits);
+    onChange((negative ? '-' : '') + edit.digits);
   }
 
-  return <input ref={inputRef} type="text" inputMode="numeric" aria-label={label} disabled={disabled} value={formatted} onChange={handleChange}
+  return <input ref={inputRef} type="text" inputMode={allowNegative ? 'text' : 'numeric'} aria-label={label} disabled={disabled} value={formatted} onChange={handleChange}
     autoComplete="off" spellCheck={false}
     style={{ width: "100%", minWidth: 0, minHeight: 42, boxSizing: "border-box", padding: 12, border: `1px solid ${theme.border}`,
       borderRadius: 7, backgroundColor: theme.inputBackground, color: theme.text, outlineColor: theme.primary,
