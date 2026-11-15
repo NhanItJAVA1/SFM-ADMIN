@@ -1,7 +1,7 @@
 import { adminApi, type AdminUser, type AdminUserRole, type AdminUserStatus } from "@/api/adminApi";
 import { AdminUserRow, FilterChip, InfoRow, confirmAdminAction, formatDate, getUserStatusLabel, showAdminMessage } from "@/components/admin/admin-page-shared";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState, type SetStateAction } from "react";
+import { useCallback, useState, type SetStateAction } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
 import { useAdminTheme } from "@/components/admin/admin-design";
@@ -37,8 +37,10 @@ export function UsersPage() {
         (userStatusFilter === "All" || !user.status || user.status === userStatusFilter) &&
         (!search || [user.username, user.email, user.displayName ?? ""].some(value => value.toLowerCase().includes(search))));
       const page = Math.min(userPage, Math.max(1, Math.ceil(filtered.length / userPageSize)));
+      if (!signal.aborted && page !== userPage) setUserPage(page);
       return { items: filtered.slice((page - 1) * userPageSize, page * userPageSize), totalCount: filtered.length, page };
     }
+    if (!signal.aborted && data.page && data.page !== userPage) setUserPage(data.page);
     return { items: Array.isArray(data.items) ? data.items : [], totalCount: data.totalCount ?? 0, page: data.page ?? userPage };
   }, [userPage, userPageSize, userRoleFilter, userSearch, userStatusFilter]);
   const { data, setData, loading, refreshing: isRefreshing, error: loadError, reload: loadUsers } =
@@ -51,7 +53,6 @@ export function UsersPage() {
     ...current,
     items: typeof update === "function" ? update(current.items) : update
   }));
-  useEffect(() => { setUserPage(data.page); }, [data.page]);
   useFocusEffect(useCallback(() => {
     if (!userId || !/^\d+$/.test(userId)) return;
     let disposed = false;

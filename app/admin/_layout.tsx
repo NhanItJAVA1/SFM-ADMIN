@@ -50,14 +50,14 @@ export default function AdminLayout() {
     <AdminShell view={adminViewFromPath(pathname)} onNavigate={navigateAdmin}
       name={currentUser?.displayName ?? currentUser?.username ?? "Admin"} isLoggingOut={isLoggingOut}
       onLogout={() => confirmAdminAction("Đăng xuất", "Bạn muốn đăng xuất khỏi trang Admin?", () => void logout(), "Đăng xuất", true)}>
-      {/* Lazy routes retain their local state, including an in-flight training request. */}
+      {/* Lazy routes retain their local state, including an in-flight forecast request. */}
       <Tabs backBehavior="history" tabBar={() => null}
         screenOptions={{ headerShown: false, lazy: true, animation: "none", sceneStyle: { backgroundColor: theme.screen } }}>
         <Tabs.Screen name="index" />
         <Tabs.Screen name="users" />
         <Tabs.Screen name="categories" />
         <Tabs.Screen name="documents" />
-        <Tabs.Screen name="training" />
+        <Tabs.Screen name="forecast" />
         <Tabs.Screen name="monitoring" />
         <Tabs.Screen name="analysis-config" />
         <Tabs.Screen name="load-testing" options={{ href: __DEV__ ? "/admin/load-testing" : null }} />

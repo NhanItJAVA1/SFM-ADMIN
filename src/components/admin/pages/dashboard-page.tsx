@@ -1,13 +1,12 @@
 import { adminApi, type AdminUser } from "@/api/adminApi";
 import type { Category } from "@/api/categoriesApi";
 import { ragDocumentsApi, type RagDocument } from "@/api/ragDocumentsApi";
-import { navigateToAdminUser } from "@/components/admin/admin-navigation";
 import { AdminUserRow, StatRow, getRequestErrorMessage, type CategoryIconComponent } from "@/components/admin/admin-page-shared";
 import { ArrowUpRight, BookOpen, FolderOpen, RotateCw, SlidersHorizontal, Users } from "lucide-react-native";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { useAdminTheme } from "@/components/admin/admin-design";
-import { navigateAdmin } from "@/components/admin/admin-navigation";
+import { navigateAdmin, navigateToAdminUser } from "@/components/admin/admin-navigation";
 import { useAdminStyles } from "@/components/admin/admin-page-styles";
 import { FocusedScreenTransition } from "@/components/screen-transition";
 import { useAdminResource } from "@/hooks/use-admin-resource";
@@ -97,8 +96,8 @@ export function DashboardPage() {
                   <Pressable accessibilityRole="button" style={styles.panelFooter} onPress={() => navigateAdmin("documents")}><Text style={styles.inlineLinkText}>Quản lý tài liệu</Text><ArrowUpRight size={14} color={theme.primary} /></Pressable>
                 </View>
               </View>
-              <Pressable accessibilityRole="button" onPress={() => navigateAdmin("training")} style={({ hovered }) => [styles.trainingEntry, hovered && styles.hoverSurface]}>
-                <View style={styles.trainingEntryIcon}><SlidersHorizontal size={20} color={theme.primary} /></View><View style={styles.rowCopy}><Text style={styles.panelTitle}>Mô hình dự báo</Text><Text style={styles.panelSubtitle}>Chọn dữ liệu người dùng và quản lý quá trình huấn luyện.</Text></View><ArrowUpRight size={18} color={theme.textMuted} />
+              <Pressable accessibilityRole="button" onPress={() => navigateAdmin("forecast")} style={({ hovered }) => [styles.forecastEntry, hovered && styles.hoverSurface]}>
+                <View style={styles.forecastEntryIcon}><SlidersHorizontal size={20} color={theme.primary} /></View><View style={styles.rowCopy}><Text style={styles.panelTitle}>Dự báo chi tiêu</Text><Text style={styles.panelSubtitle}>Xem dự báo theo người dùng, độ dài lịch sử và kỳ dự báo.</Text></View><ArrowUpRight size={18} color={theme.textMuted} />
               </Pressable>
             </>
           )}
