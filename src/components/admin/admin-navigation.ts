@@ -6,7 +6,7 @@ export const adminPaths = {
   users: "/admin/users",
   categories: "/admin/categories",
   documents: "/admin/documents",
-  training: "/admin/training",
+  forecast: "/admin/forecast",
   monitoring: "/admin/monitoring",
   "analysis-config": "/admin/analysis-config",
   "load-testing": "/admin/load-testing",

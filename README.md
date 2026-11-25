@@ -1,4 +1,4 @@
-﻿# SFM Admin Web
+# SFM Admin Web
 
 Admin dashboard web app separated from the mobile client. It uses the same backend API and carries over the admin workspaces for user management, default categories, RAG documents, forecasting, monitoring, analysis configuration, and development load testing.
 
@@ -7,6 +7,12 @@ Admin dashboard web app separated from the mobile client. It uses the same backe
 1. Copy `.env.example` to `.env` and set `EXPO_PUBLIC_API_URL` to the backend API root (for example `https://your-api.example.com/api`).
 2. Install dependencies with `npm install`.
 3. Start the web app with `npm run web`.
+
+Forecast responses are checked before rendering dates and SVG points; incompatible
+BE/AI payloads are displayed as a form error instead of crashing the chart.
+Interactive forecast points use `forecast-chart-point.web.tsx` with standard SVG
+DOM click/keyboard events on web. The native fallback uses `Circle.onPress`.
+This avoids react-native-svg 15.16.0 forwarding unsupported responder handlers to React DOM.
 
 The web app is intended to be served over HTTPS in production. API authorization and admin role checks must remain enabled on the backend.
 
@@ -20,14 +26,27 @@ The web app is intended to be served over HTTPS in production. API authorization
 | `/admin/users` | Users, filters, pagination and detail |
 | `/admin/categories` | Default categories |
 | `/admin/documents` | RAG documents, upload, metadata, reindex and delete |
-| `/admin/training` | Forecast training and model versions |
+| `/admin/forecast` | Forecast preview by user and L/H |
 | `/admin/monitoring` | System monitoring |
 | `/admin/analysis-config` | Analysis configuration |
 | `/admin/load-testing` | Development-only load testing |
 
-The hidden tabs navigator mounts each page on its first visit and retains its state when switching pages. This keeps an ongoing training request and its result alive until the admin layout is unmounted, for example on logout or a full browser reload. Monitoring and load-testing polling follow the active route.
+The hidden tabs navigator mounts each page on its first visit and retains its state when switching pages. This keeps an ongoing forecast request and its result alive until the admin layout is unmounted, for example on logout or a full browser reload. Monitoring and load-testing polling follow the active route.
 
-Training first calls `POST /v1/admin/forecast/train/prepare`. BE builds the financial snapshot once and returns the full AI payload plus a `preparationId`. The admin page writes accounts, transactions, budgets and categories for each user directly into the console-style training log, with filtering and a full JSON download. It then calls `POST /v1/admin/forecast/train` with that ID. BE uses the same stored snapshot, rather than fetching data again or trusting financial records submitted by the browser. Preparations are bound to the admin, expire in Redis after 10 minutes, and are consumed once. The existing train endpoint still accepts the original request without a preparation ID. Deploy/restart the updated BE together with this UI; AI needs no contract change. The displayed payload stays in page memory and is cleared for the next run or on reload/logout.
+Forecast preview calls `POST /v1/admin/forecast/preview` with `userId`, `asOf`,
+`lookbackDays` (14/30/90) and `forecastDays` (7/14/30). BE reads the selected user's
+DB ledger and calls AI `/api/forecast/raw`. The screen displays the entire future
+window, daily chart, total and any fallback reason. Changing a selection clears
+the previous result. Users and forecast days are paginated at five rows per page.
+The responsive desktop layout separates configuration, summary metrics, the chart
+and the five-row forecast table into distinct cards. Large screens use wider
+spacing and a taller chart; smaller screens use a compact arrangement. The page
+has a bounded content width so the chart does not stretch across ultrawide screens.
+The chart shows the selected expense history and the future window on one date axis,
+with solid history, dashed forecasts and a cutoff marker. Historical amounts come
+from the same refined AI ledger (`history: [{date, expense}]`), never from mock UI data.
+No training, artifact download, activation or model deletion
+is exposed. Train offline in sfm-ai and restart AI after installing its artifact.
 
 The users, categories and RAG pages each fetch only their own list. `src/hooks/use-admin-resource.ts` reloads on focus, aborts list requests on blur or when replaced, and ignores stale responses. RAG mutations refresh only RAG data. The overview intentionally fetches users, categories and documents for its summary cards; the backend does not currently expose a dedicated overview-summary endpoint.
 
@@ -47,12 +66,7 @@ src/components/admin/
       anomaly-reason-guide.tsx
       anomaly-reasons.ts
   forecast/
-    forecast-training-workspace.tsx
-    forecast-training-log.tsx
-    forecast-training-result.tsx
-    forecast-model-versions.tsx
-    training-users.ts
-    training-result-summary.ts
+    forecast-preview-workspace.tsx
   rag/
     documents-page.tsx
     use-rag-documents.ts
@@ -60,7 +74,7 @@ src/components/admin/
     rag-operation-dialog.tsx
 ```
 
-`app/admin/training.tsx` and `app/admin/documents.tsx` are the route entry points. Shared presentation helpers/styles remain directly under `src/components/admin/`. Old `/admin?view=documents` links redirect to the corresponding new route; `/admin/users?userId=123` opens a user from the overview.
+`app/admin/forecast.tsx` and `app/admin/documents.tsx` are the route entry points. Shared presentation helpers/styles remain directly under `src/components/admin/`. Old `/admin?view=documents` links redirect to the corresponding new route; `/admin/users?userId=123` opens a user from the overview.
 
 `app/admin/analysis-config.tsx` opens `analysis/analysis-config-workspace.tsx`. Health and Anomaly have separate subfolders. Configuration history and the VND input are shared by both tabs and remain directly under `analysis/`. Anomaly's Reason helpers live with its components in `analysis/anomaly/anomaly-reasons.ts`.
 

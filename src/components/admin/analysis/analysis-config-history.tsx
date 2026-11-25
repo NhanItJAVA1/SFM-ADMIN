@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 
 import type { AnalysisConfigVersion } from "@/api/aiApi";
 import { adminStyleSheet, useAdminTheme, type AdminTheme } from "@/components/admin/admin-design";
+import { formatContamination } from "./analysis-config-values";
 
 type Props = {
   history: AnalysisConfigVersion[];
@@ -43,6 +44,8 @@ function ConfigVersionCard({ version: row, active, disabled, onRestore }: {
   const validDate = date && Number.isFinite(date.getTime()) ? date : null;
   const isDefault = row.version === "default-v1" || (!row.createdAt && row.actor === "system");
   const { health, anomaly } = row.settings;
+  const reserveHealth = 'reserveRiskMonths' in health ? health : null;
+  const legacyHealth = 'savingsRisk' in health ? health : null;
 
   return <View style={[styles.card, active && styles.activeCard]}>
     <View style={styles.cardHeading}>
@@ -54,42 +57,54 @@ function ConfigVersionCard({ version: row, active, disabled, onRestore }: {
         </View>
         <View style={styles.metadata}>
           <View style={styles.metadataItem}><Clock3 size={12} color={theme.textMuted} /><Text style={styles.metaText}>{validDate ? `${dateFormat.format(validDate)} · ${timeFormat.format(validDate)}` : isDefault ? "Cấu hình ban đầu" : "Không rõ thời gian"}</Text></View>
-          <View style={styles.metadataItem}><UserRound size={12} color={theme.textMuted} /><Text style={styles.metaText}>{row.actor === "system" ? "Hệ thống" : `Admin #${row.actor}`}</Text></View>
+          <View style={styles.metadataItem}><UserRound size={12} color={theme.textMuted} /><Text style={styles.metaText}>{row.actor === "system" ? "Hệ thống" : /^\d+$/.test(row.actor) ? `Admin #${row.actor}` : row.actor}</Text></View>
           {row.restoredFrom ? <View style={styles.metadataItem}><RotateCcw size={11} color={theme.textMuted} /><Text style={styles.metaText}>Khôi phục từ <Text selectable>{row.restoredFrom}</Text></Text></View> : null}
           <Text style={styles.reasonText}><Text style={styles.reasonLabel}>Lý do thay đổi: </Text>{row.reason || "Không có ghi chú."}</Text>
         </View>
       </View>
-      {!active ? <Pressable accessibilityRole="button" accessibilityLabel={`Khôi phục ${row.version}`} disabled={disabled} onPress={onRestore}
+      {!active && reserveHealth ? <Pressable accessibilityRole="button" accessibilityLabel={`Khôi phục ${row.version}`} disabled={disabled} onPress={onRestore}
         style={({ hovered, pressed }) => [styles.restoreButton, (hovered || pressed) && styles.hover, disabled && styles.disabled]}>
         <RotateCcw size={14} color={theme.primary} /><Text style={styles.restoreText}>Khôi phục</Text>
       </Pressable> : null}
     </View>
 
     <View style={styles.metrics}>
-      <View style={styles.metric}>
-        <View style={styles.metricHeading}><PiggyBank size={14} color={theme.textMuted} /><Text style={styles.metricTitle}>Tiết kiệm</Text></View>
-        <ThresholdSummary kind="savings" lower={health.savingsRisk} upper={health.savingsWarning} />
-      </View>
-      <View style={styles.metric}>
-        <View style={styles.metricHeading}><Wallet size={14} color={theme.textMuted} /><Text style={styles.metricTitle}>Ngân sách</Text></View>
-        <ThresholdSummary kind="budget" lower={health.budgetWarning} upper={health.budgetRisk} />
-      </View>
+      {legacyHealth ? <View style={styles.metric}>
+        <View style={styles.metricHeading}><PiggyBank size={14} color={theme.textMuted} /><Text style={styles.metricTitle}>Tiết kiệm · phiên bản cũ</Text></View>
+        <ThresholdSummary kind="savings" lower={legacyHealth.savingsRisk} upper={legacyHealth.savingsWarning} />
+      </View> : null}
+      {legacyHealth ? <View style={styles.metric}>
+        <View style={styles.metricHeading}><Wallet size={14} color={theme.textMuted} /><Text style={styles.metricTitle}>Ngân sách · phiên bản cũ</Text></View>
+        <ThresholdSummary kind="budget" lower={legacyHealth.budgetWarning} upper={legacyHealth.budgetRisk} />
+        <Text style={styles.help}>Chỉ xem lịch sử; không thể khôi phục Health cũ sang mô hình dự phòng.</Text>
+      </View> : null}
+      {reserveHealth ? <View style={styles.metric}>
+        <View style={styles.metricHeading}><Wallet size={14} color={theme.textMuted} /><Text style={styles.metricTitle}>Cân đối thu chi</Text></View>
+        <Text style={styles.help}>Thu &gt; chi: tốt · bằng nhau: theo dõi · thu &lt; chi: cần chú ý.</Text>
+        <Text style={styles.help}>Ngân sách không tham gia chấm sức khỏe.</Text>
+      </View> : null}
+      {reserveHealth ? <View style={styles.metric}>
+        <View style={styles.metricHeading}><PiggyBank size={14} color={theme.textMuted} /><Text style={styles.metricTitle}>Dự phòng chi tiêu</Text></View>
+        <ThresholdSummary kind="reserve" lower={reserveHealth.reserveRiskMonths} upper={reserveHealth.reserveHealthyMonths} />
+        <Text style={styles.help}>Cửa sổ tối đa: {reserveHealth.expenseHistoryMonths} tháng lịch hoàn thành.</Text>
+      </View> : null}
       <View style={styles.metric}>
         <View style={styles.metricHeading}><ScanLine size={14} color={theme.textMuted} /><Text style={styles.metricTitle}>Chi tiêu bất thường</Text></View>
-        <View style={styles.metricRow}><Text style={styles.help}>Độ nhạy</Text><Text style={styles.metricValue}>{percent(anomaly.contamination)}</Text></View>
+        <View style={styles.metricRow}><Text style={styles.help}>Ngưỡng điểm</Text><Text style={styles.metricValue}>{formatContamination(anomaly.contamination)}</Text></View>
         <View style={styles.metricRow}><Text style={styles.help}>Dữ liệu tối thiểu</Text><Text style={styles.metricValue}>{anomaly.minExpenseCount} khoản chi</Text></View>
       </View>
     </View>
   </View>;
 }
 
-function ThresholdSummary({ kind, lower, upper }: { kind: "savings" | "budget"; lower: number; upper: number }) {
+function ThresholdSummary({ kind, lower, upper }: { kind: "savings" | "budget" | "reserve"; lower: number; upper: number }) {
   const styles = createStyles(useAdminTheme());
   const risk = { label: "Rủi ro", color: "#df565e" };
   const warning = { label: "Cảnh báo", color: "#e4a030" };
   const healthy = { label: "Ổn định", color: "#26976b" };
-  const bands = kind === "savings" ? [risk, warning, healthy] : [healthy, warning, risk];
-  const ranges = [`< ${percent(lower)}`, `${percent(lower)} – < ${percent(upper)}`, `≥ ${percent(upper)}`];
+  const bands = kind === "budget" ? [healthy, warning, risk] : [risk, warning, healthy];
+  const format = kind === 'reserve' ? (value: number) => `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(value)} tháng` : percent;
+  const ranges = [`< ${format(lower)}`, `${format(lower)} – < ${format(upper)}`, `≥ ${format(upper)}`];
 
   // Equal bands summarize the three classification ranges, rather than a numeric axis.
   return <View style={styles.thresholdSummary}>

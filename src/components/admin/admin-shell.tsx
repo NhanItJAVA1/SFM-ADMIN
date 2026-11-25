@@ -5,13 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { adminStyleSheet, useAdminTheme } from './admin-design';
 
-export type AdminView = 'dashboard' | 'users' | 'categories' | 'documents' | 'training' | 'monitoring' | 'analysis-config' | 'load-testing';
+export type AdminView = 'dashboard' | 'users' | 'categories' | 'documents' | 'forecast' | 'monitoring' | 'analysis-config' | 'load-testing';
 const navigation = [
   { key: 'dashboard', label: 'Tổng quan', Icon: LayoutDashboard },
   { key: 'users', label: 'Người dùng', Icon: Users },
   { key: 'categories', label: 'Danh mục', Icon: FolderOpen },
   { key: 'documents', label: 'Tài liệu tri thức', Icon: BookOpen },
-  { key: 'training', label: 'Huấn luyện AI', Icon: SlidersHorizontal },
+  { key: 'forecast', label: 'Dự báo chi tiêu', Icon: SlidersHorizontal },
   { key: 'analysis-config', label: 'Cấu hình phân tích', Icon: HeartPulse },
   { key: 'monitoring', label: 'Giám sát hệ thống', Icon: Activity },
   { key: 'load-testing', label: 'Kiểm thử tải', Icon: Gauge },

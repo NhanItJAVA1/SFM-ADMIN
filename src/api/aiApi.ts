@@ -1,51 +1,52 @@
 import { axiosClient } from './axiosClient';
 
-export type AIHealthStatus = 'Healthy' | 'Warning' | 'Risk';
+export type AIHealthStatus = 'Healthy' | 'Warning' | 'Risk' | 'InsufficientData';
 
+export type AIHealth = {
+  status: AIHealthStatus;
+  cashflowStatus: AIHealthStatus;
+  reserveStatus: AIHealthStatus;
+  reserveMonths: number | null;
+  reasons: string[];
+};
+
+export type AIAnalysisFeatures = {
+  total_income: number;
+  total_expense: number;
+  net_cashflow: number;
+  transaction_count: number;
+  current_balance: number | null;
+  average_monthly_expense: number | null;
+  history_months: number;
+};
+
+// Thống kê công khai tách khỏi kết quả Health và metadata của Forecast.
 export type AIAnalysis = {
-  user_id: number;
-  health_status: AIHealthStatus;
-  health_breakdown: {
-    cashflowStatus: AIHealthStatus;
-    budgetStatus: AIHealthStatus;
-    reasons: string[];
-  };
-  features: {
-    total_income: number;
-    total_expense: number;
-    net_cashflow: number;
-    savings_rate: number;
-    transaction_count: number;
-    avg_expense: number;
-    max_expense: number;
-    max_budget_usage: number;
-    top_categories: AITopCategory[];
-  };
+  features: AIAnalysisFeatures;
+  health: AIHealth;
   anomalySummary: AIAnomalySummary;
   forecast: AIForecast;
   recommendations: AIRecommendation[];
+  user_id: number;
   metadata: AIAnalysisMetadata;
 };
 
-export type AITopCategory = {
-  name: string;
-  amount: number;
+export type AnomalyPolicy = {
+  categoryMinCount: number;
+  referenceLookbackDays: number;
+  featureColumns: string[];
 };
 
-export type AnomalyPolicy = {
-  categoryMinCount: number; referenceLookbackDays: number;
-  categoryRatioLimit: number; categoryZLimit: number; balanceShareLimit: number;
-};
 export type AnomalyAssessment = {
   transactionId: number | null; date: string; categoryId: number | null; category: string;
   amount: number; reasonCodes: string[];
+  // Hai trạng thái còn lại chỉ để đọc kết quả/log phiên bản cũ.
   status: 'normal' | 'anomaly' | 'insufficient_history';
   anomalyScore: number | null;
   categorySampleCount: number; categoryMedian: number | null;
 };
-// Kiểu dẫn xuất cho UI sau khi lọc assessments; API không gửi danh sách thứ hai.
-export type AIAnomaly = AnomalyAssessment & { status: 'anomaly' };
 
+export type AIAnomaly = AnomalyAssessment & { status: 'anomaly' };
 export type AIAnomalySummary = {
   status: 'ok' | 'partial' | 'insufficient_data';
   assessedTransactionCount: number; anomalyCount: number; insufficientCount: number;
@@ -53,38 +54,50 @@ export type AIAnomalySummary = {
 };
 
 export type AIForecast = {
-  status: string; method: string; model: string; modelVersion: string | null;
-  asOf: string; forecastStartDate: string; forecastEndDate: string;
-  forecastHorizonDays: number; lookbackDays: number;
-  dailyForecasts: AIDailyForecast[]; predictedTotalExpense: number;
-  dataQuality: AIDataQuality;
+  status: string;
+  forecastStartDate: string;
+  forecastEndDate: string;
+  dailyForecasts: AIDailyForecast[];
+  predictedTotalExpense: number;
 };
 export type AIDailyForecast = { date: string; predictedExpense: number };
-export type AIDataQuality = {
-  asOf: string; status: string; requiredHistoryDays: number; availableHistoryDays: number;
-  missingDaysFilledWithZero: number; monthlyIncomeAvailable: boolean; notes: string[];
-  [key: string]: unknown;
+export type AIForecastDataQuality = {
+  requiredHistoryDays?: number;
+  usedHistoryDays?: number;
+  availableHistoryDays: number;
+  missingDaysFilledWithZero: number;
+  notes: string[];
 };
+export type AIForecastMetadata = {
+  lagDays: number;
+  model: string;
+  modelVersion: string | null;
+  lookbackDays: number;
+  forecastHorizonDays: number;
+  dataQuality: AIForecastDataQuality;
+};
+// API Forecast độc lập có thể trả thêm chỉ số kỹ thuật; Analyze chỉ dùng bản gọn.
+export type AIDataQuality = AIForecastDataQuality & { [key: string]: unknown };
 
 export type AIRecommendation = {
+  code: string;
   category: string;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW' | string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | (string & {});
   title: string;
   message: string;
   action: string;
-  code: string;
-  priorityScore: number;
+  budgetId: number | null;
+  actionTarget: 'transactions' | 'budgets' | null;
 };
 
 export type AIAnalysisMetadata = {
-  asOf: string; periodStart: string; forecastContextStart: string;
-  inputTransactionCount: number; periodTransactionCount: number; forecastTransactionCount: number;
-  environment: string;
+  asOf: string;
+  periodStart: string;
   periodDays: number;
   healthModel: string;
   analysisConfigVersion: string;
-  rankingModel: string;
-  note: string;
+  recommendationMethod: string;
+  forecast: AIForecastMetadata;
 };
 
 export type AIChatPayload = {
@@ -101,145 +114,36 @@ export type AIChatResponse = {
   sources: AIChatSource[];
 };
 
-export type AIForecastTrainPayload = {
-  asOf: string;
-  historyMonths?: number | null;
-  userIds?: number[];
+export type ForecastPreviewRequest = {
+  userId: number; asOf: string; lookbackDays: ForecastLookbackDays; forecastDays: ForecastDays;
 };
-
-export type ForecastTrainingAccount = {
-  id: number; userId: number; initialBalance: number;
-  createdAt: string; deletedAt: string | null; openingBalance?: number;
-};
-export type ForecastTrainingTransaction = {
-  id: number; accountId: number; categoryId: number | null; type: string; amount: number;
-  transactionDate: string; isExcluded: boolean; createdAt: string; deletedAt: string | null;
-};
-export type ForecastTrainingBudget = {
-  id: number; userId: number; categoryId: number | null; amount: number;
-  startDate: string; endDate: string; createdAt: string; deletedAt: string | null; spentBeforeHistory?: number;
-};
-export type ForecastTrainingCategory = { id: number; userId: number | null; type: string };
-export type ForecastTrainingSnapshot = {
-  userId: number; asOf: string; historyStartDate?: string;
-  accounts: ForecastTrainingAccount[]; transactions: ForecastTrainingTransaction[];
-  budgets: ForecastTrainingBudget[]; categories: ForecastTrainingCategory[];
-};
-export type ForecastTrainingPayload = {
-  users: ForecastTrainingSnapshot[]; parameters: Record<string, number>;
-  originStrideDays: number; historyMonths: number | null;
-};
-export type ForecastTrainingPreparation = {
-  preparationId: string; expiresAt: string; payload: ForecastTrainingPayload;
-};
-
-export type ForecastTrainingMetrics = {
-  dailyMAE: number;
-  dailyRMSE: number;
-  dailyWAPE: number | null;
-  sevenDayTotalWAPE: number | null;
-};
-
-export type ForecastTrainingSplitPart = {
-  rowCount: number;
-  userCount: number;
-  firstOrigin: string;
-  lastOrigin: string;
-};
-
-export type ForecastTrainingResponse = {
-  runId?: string;
-  candidateModelVersion?: string;
-  activeModelVersion?: string | null;
-  archived?: boolean;
-  activated?: boolean;
-  catalogSynced?: boolean;
-  catalogWarning?: string | null;
-  selection?: { activate: boolean; reason: string; previousModelVersion?: string | null;
-    candidate?: ForecastTrainingMetrics; previous?: ForecastTrainingMetrics | null };
-  status: string;
-  saved: boolean;
-  modelVersion: string | null;
-  dataset: {
-    inputUserCount: number;
-    usableUserCount: number;
-    skippedUserCount: number;
-    skippedIncomeWindowCount: number;
-    forecastWindowCount: number;
-    rowCount: number;
-    originStrideDays: number;
-    asOf: string;
-    currency: string;
-    historicalMode: string;
-    limitation: string;
-  };
-  split: {
-    train: ForecastTrainingSplitPart;
-    validation: ForecastTrainingSplitPart;
-    test: ForecastTrainingSplitPart;
-    method: string;
-    purgeHorizonDays: number;
-    discardedRows: number;
-  };
-  evaluation: {
-    validation: { sampleCount: number; models: Record<string, ForecastTrainingMetrics> };
-    test: { sampleCount: number; models: Record<string, ForecastTrainingMetrics> };
-    saveCheck: { metric: string; baseline: string; passed: boolean; reason: string };
+export type RawForecastResponse = {
+  userId: number; currency: string;
+  history: { date: string; expense: number }[];
+  forecast: AIForecast & AIForecastMetadata & { asOf: string; method: string };
+  preprocessing: {
+    historyStartDate: string | null; asOf: string; dailyRowCount: number;
+    monthlyIncomeEstimate: number | null; remainingBudget: number | null; accountBalance: number;
   };
 };
-
-export type ForecastVersion = {
-  runId: string;
-  modelVersion: string;
-  status: 'running' | 'succeeded' | 'failed' | 'imported';
-  source?: string;
-  isActive: boolean;
-  hasModel: boolean;
-  startedAt: string;
-  finishedAt?: string;
-  syncedAt?: string;
-  parameters?: Record<string, number>;
-  calibration?: number;
-  dataset?: ForecastTrainingResponse['dataset'] | null;
-  split?: ForecastTrainingResponse['split'] | null;
-  evaluation?: ForecastTrainingResponse['evaluation'] | null;
-  selection?: ForecastTrainingResponse['selection'];
-  trainLogMSE?: { initial: number; final: number; byIteration?: number[] };
-  error?: { type: string; message: string };
-};
-
-export type ForecastVersionPage = {
-  activeModelVersion: string | null;
-  total: number;
-  limit: number;
-  offset: number;
-  items: ForecastVersion[];
-};
-
-export type ForecastModelArtifact = {
-  formatVersion: number;
-  model: string;
-  nFeatures: number;
-  baseValue: number;
-  params: Record<string, number>;
-  trees: unknown[];
-  metadata: { modelVersion: string; featureNames: string[]; calibration?: number };
-};
-
-export type ForecastVersionAction = { status: string; activeModelVersion: string | null;
-  catalogSynced: boolean; catalogWarning?: string | null };
 
 export type AnalysisSettings = {
+  health: { reserveRiskMonths: number; reserveHealthyMonths: number; expenseHistoryMonths: number };
+  anomaly: { contamination: 'auto' | number; minExpenseCount: number };
+};
+// Chỉ đọc lịch sử; BE không cho khôi phục Health dùng tiết kiệm/ngân sách.
+export type LegacyAnalysisSettings = {
   health: { savingsRisk: number; savingsWarning: number; budgetWarning: number; budgetRisk: number };
-  anomaly: { contamination: number; minExpenseCount: number };
+  anomaly: AnalysisSettings['anomaly'];
 };
 export type AnalysisConfigVersion = {
   version: string; createdAt: string | null; actor: string; reason: string;
-  restoredFrom: string | null; settings: AnalysisSettings;
+  restoredFrom: string | null; settingsSchemaVersion?: number;
+  settings: AnalysisSettings | LegacyAnalysisSettings;
 };
 export type AnalysisPreviewInput = {
-  settings: AnalysisSettings; income: number; expense: number; budgetLimit: number;
-  budgetSpent: number; unusualExpense: number; currentBalance: number;
+  settings: AnalysisSettings; income: number; expense: number; averageMonthlyExpense: number;
+  unusualExpense: number; currentBalance: number;
 };
 export type AnalysisPreviewTransaction = {
   transactionId: number; date: string; category: string; amount: number;
@@ -251,10 +155,14 @@ export type AnalysisPreviewDataset = {
 };
 export type AnalysisPreview = {
   preview: true; currency: 'VND'; sampleExpenseCount: number;
-  health: { status: AIHealthStatus; savingsRate: number; budgetUsage: number;
-    breakdown: { cashflowStatus: string; budgetStatus: string; reasons: string[] } };
+  features: AIAnalysisFeatures;
+  health: AIHealth & { model: string };
   anomaly: { summary: AIAnomalySummary };
 };
+
+export type ForecastLookbackDays = 14 | 30 | 90;
+export type ForecastDays = 7 | 14 | 30;
+export type ForecastOptions = { lookbackDays?: ForecastLookbackDays; forecastDays?: ForecastDays };
 
 export const aiApi = {
   analysisConfigHistory: () => axiosClient.get<{ activeVersion: string; items: AnalysisConfigVersion[] }>('/v1/admin/analysis-config/history'),
@@ -264,20 +172,11 @@ export const aiApi = {
     axiosClient.post<AnalysisConfigVersion>(`/v1/admin/analysis-config/${encodeURIComponent(version)}/restore`, payload),
   previewAnalysisConfig: (payload: AnalysisPreviewInput) => axiosClient.post<AnalysisPreview>('/v1/admin/analysis-config/preview', payload),
   analysisPreviewDataset: (signal?: AbortSignal) => axiosClient.get<AnalysisPreviewDataset>('/v1/admin/analysis-config/preview-data', { signal }),
-  analysis: () => axiosClient.post<AIAnalysis>('/v1/FinancialAdvisor/analyze'),
+  analysis: (options: ForecastOptions = {}) => axiosClient.post<AIAnalysis>(
+    `/v1/FinancialAdvisor/analyze?${new URLSearchParams({
+      lookbackDays: String(options.lookbackDays ?? 14), forecastDays: String(options.forecastDays ?? 7),
+    })}`, undefined, { timeout: 130000 }),
   chat: (payload: AIChatPayload) => axiosClient.post<AIChatResponse>('/v1/AI/chat', payload),
-  prepareForecastTraining: (payload: AIForecastTrainPayload) =>
-    axiosClient.post<ForecastTrainingPreparation>('/v1/admin/forecast/train/prepare', payload),
-  trainForecast: (payload: AIForecastTrainPayload | { preparationId: string }) =>
-    axiosClient.post<ForecastTrainingResponse>('/v1/admin/forecast/train', payload),
-  forecastVersions: (limit = 10, offset = 0) =>
-    axiosClient.get<ForecastVersionPage>(`/v1/admin/forecast/versions?limit=${limit}&offset=${offset}`),
-  forecastVersion: (runId: string) =>
-    axiosClient.get<ForecastVersion>(`/v1/admin/forecast/versions/${encodeURIComponent(runId)}`),
-  forecastModel: (runId: string) =>
-    axiosClient.get<ForecastModelArtifact>(`/v1/admin/forecast/versions/${encodeURIComponent(runId)}/model`),
-  activateForecastVersion: (runId: string) =>
-    axiosClient.post<ForecastVersionAction>(`/v1/admin/forecast/versions/${encodeURIComponent(runId)}/activate`),
-  deleteForecastVersion: (runId: string) =>
-    axiosClient.delete<ForecastVersionAction>(`/v1/admin/forecast/versions/${encodeURIComponent(runId)}`),
+  previewForecast: (payload: ForecastPreviewRequest, signal?: AbortSignal) =>
+    axiosClient.post<RawForecastResponse>('/v1/admin/forecast/preview', payload, { signal, timeout: 130000 }),
 };

@@ -6,13 +6,12 @@ import { Text, TextInput, View } from "react-native";
 import { adminStyleSheet, useAdminTheme, type AdminTheme } from "@/components/admin/admin-design";
 
 export type HealthThresholdValues = {
-  savingsRisk: string;
-  savingsWarning: string;
-  budgetWarning: string;
-  budgetRisk: string;
+  reserveRiskMonths: string;
+  reserveHealthyMonths: string;
+  expenseHistoryMonths: string;
 };
 
-type ThresholdKind = "savings" | "budget";
+type ThresholdKind = "reserve";
 type Props = {
   value: HealthThresholdValues;
   disabled: boolean;
@@ -20,33 +19,20 @@ type Props = {
 };
 
 const colors = { healthy: "#26976b", warning: "#e4a030", risk: "#df565e" };
-const sliderStep = 0.5;
+const sliderStep = 0.1;
 const options = {
-  savings: {
-    title: "Tỷ lệ tiết kiệm",
-    description: "Phần thu nhập còn lại sau chi tiêu.",
-    lowerKey: "savingsRisk",
-    upperKey: "savingsWarning",
-    lowerLabel: "Ngưỡng rủi ro",
-    upperLabel: "Ngưỡng cảnh báo",
-    min: -20,
-    max: 100,
-    defaults: [0, 20],
-    Icon: PiggyBank,
-    note: "Chi vượt thu nhập luôn được đánh giá là Rủi ro. Hai ngưỡng có thể điều chỉnh trong khoảng 0–100%.",
-  },
-  budget: {
-    title: "Mức sử dụng ngân sách",
-    description: "Tỷ lệ đã chi so với hạn mức ngân sách.",
-    lowerKey: "budgetWarning",
-    upperKey: "budgetRisk",
-    lowerLabel: "Ngưỡng cảnh báo",
-    upperLabel: "Ngưỡng rủi ro",
+  reserve: {
+    title: "Số tháng dự phòng",
+    description: "Khả năng trang trải chi tiêu từ số dư hiện có.",
+    lowerKey: "reserveRiskMonths",
+    upperKey: "reserveHealthyMonths",
+    lowerLabel: "Mốc dự phòng thấp",
+    upperLabel: "Mốc dự phòng tốt",
     min: 0,
-    max: 300,
-    defaults: [80, 100],
-    Icon: Wallet,
-    note: "100% tương đương dùng hết ngân sách. Hai ngưỡng có thể điều chỉnh trong khoảng 0–300%.",
+    max: 60,
+    defaults: [1, 6],
+    Icon: PiggyBank,
+    note: "Mốc thấp từ trên 0 đến 24 tháng; mốc tốt lớn hơn mốc thấp và tối đa 60 tháng. Mặc định 1 và 6 tháng tham khảo CFSI; ngưỡng tùy chỉnh là chính sách của hệ thống.",
   },
 } as const;
 
@@ -54,18 +40,16 @@ function readPercent(value: string) {
   return /^\d+(?:[.,]\d+)?$/.test(value.trim()) ? Number(value.trim().replace(",", ".")) : NaN;
 }
 
-/** Snap dragging to a 0.5% grid, without crossing a manually entered threshold. */
+/** Kéo theo bước 0,1 tháng, không vượt mốc còn lại hoặc giới hạn API. */
 function moveThreshold(value: number, index: number, lower: number, upper: number, max: number) {
-  const tick = Math.round(value / sliderStep);
-  const boundedTick =
-    index === 0
-      ? Math.max(0, Math.min(tick, Math.ceil(upper / sliderStep) - 1))
-      : Math.min(max / sliderStep, Math.max(tick, Math.floor(lower / sliderStep) + 1));
-  return boundedTick * sliderStep;
+  const minimum = index === 0 ? sliderStep : (Math.floor(lower / sliderStep) + 1) * sliderStep;
+  const maximum = index === 0 ? Math.min(24, (Math.ceil(upper / sliderStep) - 1) * sliderStep) : max;
+  if (minimum > maximum) return index === 0 ? lower : upper;
+  return Number(Math.min(maximum, Math.max(minimum, Math.round(value / sliderStep) * sliderStep)).toFixed(8));
 }
 
-const formatPercent = (value: number) =>
-  `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 }).format(value)}%`;
+const formatMonths = (value: number) =>
+  `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 }).format(value)} tháng`;
 
 // Native range controls retain touch, pointer and keyboard support. Only their
 // thumbs accept pointer events, so the two inputs can share the same track.
@@ -88,8 +72,17 @@ export function HealthThresholdControls(props: Props) {
   return (
     <View style={styles.grid}>
       <style>{sliderCss}</style>
-      <HealthThresholdCard kind="savings" {...props} />
-      <HealthThresholdCard kind="budget" {...props} />
+      <View style={styles.card}>
+        <View style={styles.heading}><Wallet size={20} /><Text style={styles.title}>Cân đối thu chi</Text></View>
+        <Text style={styles.help}>Thu lớn hơn chi: tốt theo chỉ báo. Thu bằng chi: cần theo dõi. Chi lớn hơn thu: cần chú ý. Chưa có giao dịch: chưa đủ dữ liệu.</Text>
+        <Text style={styles.help}>Chỉ báo này dùng thu chi đã ghi nhận. Ngưỡng cảnh báo ngân sách được đặt riêng trong từng ngân sách.</Text>
+        <Text style={styles.label}>Số tháng lịch sử tính chi bình quân</Text>
+        <View style={styles.inputBox}><TextInput accessibilityLabel="Số tháng lịch sử tính chi bình quân" inputMode="numeric"
+          editable={!props.disabled} value={props.value.expenseHistoryMonths}
+          onChangeText={value => props.onChange({ expenseHistoryMonths: value })} style={styles.input} /><Text style={styles.unit}>tháng</Text></View>
+        <Text style={styles.help}>Số nguyên từ 1–12. Chỉ lấy tháng lịch đã hoàn thành; dữ liệu thực tế có thể chỉ đủ 1–2 tháng. Không có mẫu phù hợp thì kết quả dự phòng là chưa đủ dữ liệu.</Text>
+      </View>
+      <HealthThresholdCard kind="reserve" {...props} />
     </View>
   );
 }
@@ -105,7 +98,7 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
   const valid =
     Number.isFinite(rawLower) &&
     Number.isFinite(rawUpper) &&
-    rawLower >= 0 &&
+    rawLower > 0 && rawLower <= 24 &&
     rawLower < rawUpper &&
     rawUpper <= config.max;
   const [lower, upper] = valid ? [rawLower, rawUpper] : config.defaults;
@@ -113,15 +106,14 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
   const lowerPosition = position(lower);
   const upperPosition = position(upper);
   const offset = position(0);
-  const palette =
-    kind === "savings" ? [colors.risk, colors.warning, colors.healthy] : [colors.healthy, colors.warning, colors.risk];
-  const thumbColors = kind === "savings" ? [colors.risk, colors.warning] : [colors.warning, colors.risk];
-  const labels = kind === "savings" ? ["Rủi ro", "Cảnh báo", "Ổn định"] : ["Ổn định", "Cảnh báo", "Rủi ro"];
+  const palette = [colors.risk, colors.warning, colors.healthy];
+  const thumbColors = [colors.risk, colors.warning];
+  const labels = ["Cần chú ý", "Cần theo dõi", "Tốt theo chỉ báo"];
   const descriptions = valid
     ? [
-        `Dưới ${formatPercent(lower)}`,
-        `${formatPercent(lower)} đến dưới ${formatPercent(upper)}`,
-        `Từ ${formatPercent(upper)} trở lên`,
+        `Dưới ${formatMonths(lower)}`,
+        `${formatMonths(lower)} đến dưới ${formatMonths(upper)}`,
+        `Từ ${formatMonths(upper)} trở lên`,
       ]
     : ["—", "—", "—"];
   const rangeStyle: CSSProperties = { left: `calc(${offset}% - 10px)`, width: `calc(${100 - offset}% + 20px)` };
@@ -133,7 +125,7 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
   }
 
   function handleKey(event: KeyboardEvent<HTMLInputElement>, index: number, current: number) {
-    const step = event.shiftKey ? 10 : sliderStep;
+    const step = event.shiftKey ? 1 : sliderStep;
     const previous = (Math.ceil(current / step) - 1) * step;
     const nextTick = (Math.floor(current / step) + 1) * step;
     const next = {
@@ -141,8 +133,8 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
       ArrowDown: previous,
       ArrowRight: nextTick,
       ArrowUp: nextTick,
-      PageDown: current - 10,
-      PageUp: current + 10,
+      PageDown: current - 1,
+      PageUp: current + 1,
       Home: 0,
       End: config.max,
     }[event.key];
@@ -171,14 +163,14 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
             </View>
             <View style={[styles.inputBox, !valid && styles.invalid, disabled && styles.disabled]}>
               <TextInput
-                accessibilityLabel={`${config.title}: ${index === 0 ? config.lowerLabel : config.upperLabel} (%)`}
+                accessibilityLabel={`${config.title}: ${index === 0 ? config.lowerLabel : config.upperLabel} (tháng)`}
                 inputMode="decimal"
                 editable={!disabled}
                 value={value[key]}
                 onChangeText={(next) => onChange({ [key]: next })}
                 style={styles.input}
               />
-              <Text style={styles.unit}>%</Text>
+              <Text style={styles.unit}>tháng</Text>
             </View>
           </View>
         ))}
@@ -202,7 +194,7 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
               <div key={index} style={{ width: `${width}%`, background: palette[index] }} />
             ))}
           </div>
-          {/* Preserve typed decimals in the native control; move() snaps slider interactions to 0.5%. */}
+          {/* Giữ số thập phân đã nhập; move() chỉ làm tròn khi kéo hoặc dùng phím. */}
           {[lower, upper].map((current, index) => (
             <input
               key={index}
@@ -214,7 +206,7 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
               value={current}
               disabled={disabled || !valid}
               aria-label={`${config.title}: ${index === 0 ? config.lowerLabel : config.upperLabel}`}
-              aria-valuetext={formatPercent(current)}
+              aria-valuetext={formatMonths(current)}
               aria-describedby={descriptionId}
               style={{ ...rangeStyle, color: thumbColors[index], zIndex: index + 1 }}
               onChange={(event) => move(index, event.target.valueAsNumber)}
@@ -223,14 +215,13 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
           ))}
         </div>
         <View style={styles.scale}>
-          <Text style={styles.tick}>{kind === "savings" ? "≤ −20%" : "0%"}</Text>
-          <Text style={styles.tick}>{config.max}%</Text>
+          <Text style={styles.tick}>0 tháng</Text>
+          <Text style={styles.tick}>{config.max} tháng</Text>
         </View>
       </View>
       {!valid ? (
         <Text accessibilityRole="alert" style={styles.error}>
-          Nhập hai ngưỡng từ 0–{config.max}%, với{" "}
-          {kind === "savings" ? "rủi ro nhỏ hơn cảnh báo" : "cảnh báo nhỏ hơn rủi ro"}.
+          Mốc thấp phải lớn hơn 0, tối đa 24 tháng và nhỏ hơn mốc tốt; mốc tốt tối đa {config.max} tháng.
         </Text>
       ) : null}
       <View style={styles.legend}>
@@ -247,7 +238,7 @@ function HealthThresholdCard({ kind, value, disabled, onChange }: Props & { kind
       <View style={styles.note}>
         <Info size={14} color={theme.textMuted} />
         <Text nativeID={descriptionId} style={styles.noteText}>
-          {config.note} Kéo mốc theo bước 0,5%; nhập số ở trên nếu cần giá trị chi tiết hơn.
+          {config.note} Kéo mốc theo bước 0,1 tháng; nhập số ở trên nếu cần giá trị chi tiết hơn.
         </Text>
       </View>
     </View>
